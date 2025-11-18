@@ -1,0 +1,125 @@
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+  console.log('🚀 Sistema de Salidas de Producto inicializado');
+  
+  // Event listeners
+  const loginForm = document.getElementById('loginForm');
+  const formRegistro = document.getElementById('formRegistro');
+  const modalRegistro = document.getElementById('modalRegistro');
+  
+  if (loginForm) {
+    loginForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      iniciarSesion();
+    });
+  }
+  
+  if (formRegistro) {
+    formRegistro.addEventListener('submit', guardarRegistro);
+  }
+  
+  if (modalRegistro) {
+    modalRegistro.addEventListener('click', function(e) {
+      if (e.target === this) {
+        cerrarModalRegistro();
+      }
+    });
+  }
+  
+  // Agregar estilos para notificaciones
+  const styles = document.createElement('style');
+  styles.textContent = `
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .notificacion-contenido {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .notificacion-cerrar {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+  `;
+  document.head.appendChild(styles);
+});
+
+function verDetalle(id) {
+  if (!datosCompletos || !datosCompletos.registros) {
+    mostrarNotificacion('No hay datos disponibles para mostrar', 'warning');
+    return;
+  }
+  
+  const registro = datosCompletos.registros.find(r => r.ID === id);
+  
+  if (!registro) {
+    mostrarNotificacion('No se encontró el registro solicitado', 'error');
+    return;
+  }
+  
+  registroActual = registro;
+  cargarOpcionesEstado(); // Cargar opciones para edición
+  mostrarModalDetalles(registro);
+}
+
+function mostrarModalDetalles(registro) {
+  console.log('📋 Mostrando detalles del registro:', registro);
+  
+  // Actualizar título con código
+  document.getElementById('tituloCodigo').textContent = registro.Código || 'Sin código';
+  
+  // Llenar información de detalles
+  llenarDetallesRegistro(registro);
+  
+  // Configurar estado actual para edición
+  document.getElementById('estadoActualTexto').textContent = registro.Estado || 'Desconocido';
+  document.getElementById('estadoActualTexto').className = 'badge ' + obtenerBadgeEstado(registro.Estado).clase;
+  
+  // Resetear formulario de edición
+  document.getElementById('editarEstado').value = '';
+  document.getElementById('editarObservaciones').value = '';
+  document.getElementById('estadoNuevoTexto').textContent = 'Seleccione estado';
+  document.getElementById('estadoNuevoTexto').className = 'badge badge-info';
+  
+  // Mostrar pestaña de detalles por defecto
+  cambiarPestania('detalles');
+  
+  // Mostrar modal
+  document.getElementById('modalDetalles').classList.add('active');
+}
+
+function llenarDetallesRegistro(registro) {
+  // Información básica
+  document.getElementById('detalleId').textContent = registro.ID || '-';
+  document.getElementById('detalleCodigo').textContent = registro.Código || '-';
+  document.getElementById('detalleDescripcion').textContent = registro.Descripción || '-';
+  
+  // Clasificación
+  document.getElementById('detalleTipoSalida').textContent = registro['Tipo de Salida'] || '-';
+  document.getElementById('detalleTipoPlaga').textContent = registro['Tipo de Plaga/Hallazgo'] || 'N/A';
+  
+  // Estado
+  const estadoElement = document.getElementById('detalleEstado');
+  const estado = registro.Estado || '-';
+  estadoElement.textContent = estado;
+  estadoElement.className = 'badge ' + obtenerBadgeEstado(estado).clase;
+  
+  // Responsable y ubicación
+  document.getElementById('detalleResponsable').textContent = registro.Responsable || '-';
+  document.getElementById('detallePasillo').textContent = registro['Pasillo/Ubicación'] || '-';
+  document.getElementById('detalleTiempoRetorno').textContent = registro['Tiempo Estimado de Retorno'] || 'No especificado';
+  
+  // Fechas
+  const fechaRetiro = registro['Fecha y Hora de Retiro'] || registro.Fecha;
+  document.getElementById('detalleFecha').textContent = formatearFecha(fechaRetiro);
+  document.getElementById('detalleTiempoTranscurrido').textContent = calcularTiempoTranscurrido(fechaRetiro);
+}
+</script>

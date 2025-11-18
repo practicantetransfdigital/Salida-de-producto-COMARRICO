@@ -1,0 +1,81 @@
+<script>
+    function cargarOpcionesEstado() {
+  const selectEstado = document.getElementById('editarEstado');
+  selectEstado.innerHTML = '<option value="">Seleccione nuevo estado...</option>';
+  
+  // Usar las mismas opciones que el formulario principal
+  const opcionesEstado = [
+    'En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido'
+  ];
+  
+  opcionesEstado.forEach(estado => {
+    const option = document.createElement('option');
+    option.value = estado;
+    option.textContent = estado;
+    selectEstado.appendChild(option);
+  });
+  
+  // Event listener para actualizar vista previa
+  selectEstado.addEventListener('change', function() {
+    const nuevoEstado = this.value;
+    const estadoNuevoElement = document.getElementById('estadoNuevoTexto');
+    
+    if (nuevoEstado) {
+      estadoNuevoElement.textContent = nuevoEstado;
+      estadoNuevoElement.className = 'badge ' + obtenerBadgeEstado(nuevoEstado).clase;
+    } else {
+      estadoNuevoElement.textContent = 'Seleccione estado';
+      estadoNuevoElement.className = 'badge badge-info';
+    }
+  });
+}
+
+function guardarCambioEstado() {
+  if (!registroActual) {
+    mostrarNotificacion('No hay registro seleccionado', 'error');
+    return;
+  }
+  
+  const nuevoEstado = document.getElementById('editarEstado').value;
+  const observaciones = document.getElementById('editarObservaciones').value.trim();
+  
+  if (!nuevoEstado) {
+    mostrarNotificacion('Por favor seleccione un nuevo estado', 'error');
+    return;
+  }
+  
+  if (nuevoEstado === registroActual.Estado) {
+    mostrarNotificacion('El estado seleccionado es el mismo que el actual', 'warning');
+    return;
+  }
+  
+  // Confirmar cambio
+  if (!confirm(`¿Está seguro de cambiar el estado de "${registroActual.Estado}" a "${nuevoEstado}"?`)) {
+    return;
+  }
+  
+  mostrarLoading(true);
+  
+  google.script.run
+    .withSuccessHandler(respuestaCambioEstado)
+    .withFailureHandler(errorCambioEstado)
+    .actualizarEstadoRegistro(registroActual.ID, nuevoEstado, observaciones);
+}
+
+function respuestaCambioEstado(resultado) {
+  mostrarLoading(false);
+  
+  if (resultado && resultado.success) {
+    mostrarNotificacion('✅ Estado actualizado correctamente', 'success');
+    cerrarModalDetalles();
+    cargarDashboard(); // Recargar datos
+  } else {
+    mostrarNotificacion('❌ Error al actualizar estado: ' + (resultado?.message || 'Error desconocido'), 'error');
+  }
+}
+
+function errorCambioEstado(error) {
+  mostrarLoading(false);
+  mostrarNotificacion('❌ Error del servidor: ' + error.message, 'error');
+}
+</script>

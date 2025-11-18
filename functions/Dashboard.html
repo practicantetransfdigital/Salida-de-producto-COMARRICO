@@ -1,0 +1,90 @@
+<script>
+    function cargarDashboard() {
+  console.log('🔄 Iniciando carga de dashboard...');
+  mostrarLoading(true);
+  
+  const timeoutId = setTimeout(() => {
+    mostrarLoading(false);
+    mostrarNotificacion('La carga está tardando demasiado. Verifique su conexión.', 'warning');
+  }, 15000);
+  
+  timeoutIds.push(timeoutId);
+  
+  google.script.run
+    .withSuccessHandler((resultado) => {
+      clearTimeout(timeoutId);
+      respuestaDashboard(resultado);
+    })
+    .withFailureHandler((error) => {
+      clearTimeout(timeoutId);
+      errorDashboard(error);
+    })
+    .obtenerDatosDashboard();
+  
+  // Cargar opciones para el formulario en paralelo
+  cargarOpcionesFormulario();
+}
+
+function respuestaDashboard(resultado) {
+  console.log('✅ Respuesta del dashboard:', resultado);
+  mostrarLoading(false);
+  
+  // MANEJO MEJORADO DE RESPUESTA NULL
+  if (resultado === null || resultado === undefined) {
+    console.error('❌ ERROR: El servidor devolvió null/undefined');
+    mostrarNotificacion('Error: El servidor no respondió correctamente. Verifique la conexión y los permisos.', 'error');
+    
+    // Mostrar datos de ejemplo para debugging
+    mostrarDatosEjemplo();
+    return;
+  }
+  
+  // Si es string, parsear JSON
+  if (typeof resultado === 'string') {
+    try {
+      resultado = JSON.parse(resultado);
+    } catch (e) {
+      console.error('❌ Error parseando JSON:', e);
+      mostrarNotificacion('Error: Respuesta inválida del servidor', 'error');
+      return;
+    }
+  }
+  
+  if (!resultado || typeof resultado !== 'object') {
+    console.error('❌ Error: Respuesta inválida:', resultado);
+    mostrarNotificacion('Error: Formato de respuesta inválido', 'error');
+    return;
+  }
+  
+  if (resultado.success === false) {
+    console.error('❌ Error del servidor:', resultado.message);
+    mostrarNotificacion('Error: ' + resultado.message, 'error');
+    return;
+  }
+  
+  if (resultado.success === true) {
+    console.log('✅ Dashboard cargado exitosamente');
+    datosCompletos = resultado;
+    actualizarEstadisticas(resultado.estadisticas || {});
+    crearGraficos(resultado.estadisticas || {});
+    cargarTabla((resultado.estadisticas && resultado.estadisticas.ultimosRegistros) || []);
+    mostrarNotificacion('Dashboard actualizado correctamente', 'success');
+  } else {
+    console.error('❌ Respuesta sin propiedad success:', resultado);
+    mostrarNotificacion('Error: Formato de respuesta inválido', 'error');
+  }
+}
+
+function errorDashboard(error) {
+  mostrarLoading(false);
+  console.error('❌ Error del servidor:', error);
+  
+  let mensaje = 'Error del servidor: ' + (error.message || 'Error desconocido');
+  mensaje += '\n\nSugerencias:';
+  mensaje += '\n• Verifique su conexión a internet';
+  mensaje += '\n• Confirme que la aplicación esté desplegada';
+  mensaje += '\n• Contacte al administrador del sistema';
+  
+  mostrarNotificacion(mensaje, 'error');
+}
+</script>

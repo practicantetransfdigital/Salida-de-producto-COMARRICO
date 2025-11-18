@@ -1,0 +1,87 @@
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+<script>
+// ============================================================
+// VARIABLES GLOBALES
+// ============================================================
+
+let usuarioActual = null;
+let datosCompletos = null;
+let charts = {};
+let timeoutIds = [];
+let registroActual = null;
+let pestaniaActual = 'detalles';
+
+// ============================================================
+// FUNCIONES DE AUTENTICACIÓN - CORREGIDAS
+// ============================================================
+
+function iniciarSesion() {
+  const usuario = document.getElementById('usuario').value.trim();
+  const contrasena = document.getElementById('contrasena').value;
+  
+  if (!usuario || !contrasena) {
+    mostrarError('Por favor complete todos los campos');
+    return;
+  }
+  
+  mostrarLoading(true);
+  
+  const timeoutId = setTimeout(() => {
+    mostrarLoading(false);
+    mostrarError('La autenticación está tardando demasiado. Verifique su conexión.');
+  }, 10000);
+  
+  timeoutIds.push(timeoutId);
+  
+  google.script.run
+    .withSuccessHandler((resultado) => {
+      clearTimeout(timeoutId);
+      respuestaLogin(resultado);
+    })
+    .withFailureHandler((error) => {
+      clearTimeout(timeoutId);
+      errorServidor(error);
+    })
+    .autenticarUsuario(usuario, contrasena);
+}
+
+function respuestaLogin(resultado) {
+  mostrarLoading(false);
+  
+  if (resultado && resultado.success) {
+    usuarioActual = resultado;
+    document.getElementById('userName').textContent = resultado.nombre || resultado.usuario;
+    document.getElementById('userRole').textContent = resultado.rol;
+    document.getElementById('userRole').className = 'badge badge-info';
+    
+    cambiarPantalla('mainScreen');
+    cargarDashboard();
+    
+    // Limpiar formulario de login
+    document.getElementById('usuario').value = '';
+    document.getElementById('contrasena').value = '';
+    limpiarError();
+  } else {
+    mostrarError(resultado?.message || 'Error desconocido en autenticación');
+  }
+}
+
+function cerrarSesion() {
+  // Limpiar todos los timeouts pendientes
+  timeoutIds.forEach(id => clearTimeout(id));
+  timeoutIds = [];
+  
+  // Destruir gráficos
+  Object.values(charts).forEach(chart => {
+    if (chart && typeof chart.destroy === 'function') {
+      chart.destroy();
+    }
+  });
+  charts = {};
+  
+  usuarioActual = null;
+  datosCompletos = null;
+  cambiarPantalla('loginScreen');
+}
+</script>

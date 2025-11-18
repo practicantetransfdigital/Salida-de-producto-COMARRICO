@@ -1,0 +1,164 @@
+<script>
+    function abrirModalRegistro() {
+  document.getElementById('modalRegistro').classList.add('active');
+  document.getElementById('formRegistro').reset();
+  
+  // Establecer valores por defecto
+  document.getElementById('estado').value = 'En Revisión';
+  document.getElementById('tipoPlaga').value = 'N/A';
+}
+
+function cerrarModalRegistro() {
+  // 1. Cerrar el modal
+  document.getElementById('modalRegistro').classList.remove('active');
+  
+  // 2. Limpiar el formulario (por si acaso)
+  setTimeout(() => {
+    document.getElementById('formRegistro').reset();
+    
+    // 3. Restablecer valores por defecto
+    document.getElementById('estado').value = 'En Revisión';
+    document.getElementById('tipoPlaga').value = 'N/A';
+  }, 300);
+}
+
+function guardarRegistro(event) {
+  if (event) event.preventDefault();
+  
+  // DESHABILITAR el botón para evitar doble clic
+  const btnGuardar = document.querySelector('#formRegistro button[type="submit"]');
+  const textoOriginal = btnGuardar.innerHTML;
+  btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+  btnGuardar.disabled = true;
+  
+  const datos = {
+    'Código': document.getElementById('codigo').value.trim(),
+    'Descripción': document.getElementById('descripcion').value.trim(),
+    'Tipo de Salida': document.getElementById('tipoSalida').value,
+    'Tipo de Plaga/Hallazgo': document.getElementById('tipoPlaga').value,
+    'Responsable': document.getElementById('responsable').value.trim(),
+    'Pasillo/Ubicación': document.getElementById('pasillo').value.trim(),
+    'Tiempo Estimado de Retorno': document.getElementById('tiempoRetorno').value,
+    'Estado': document.getElementById('estado').value
+  };
+  
+  // Validar campos requeridos
+  const camposRequeridos = ['Código', 'Descripción', 'Tipo de Salida', 'Responsable', 'Pasillo/Ubicación', 'Estado'];
+  const camposFaltantes = camposRequeridos.filter(campo => !datos[campo]);
+  
+  if (camposFaltantes.length > 0) {
+    mostrarNotificacion('Por favor complete todos los campos requeridos: ' + camposFaltantes.join(', '), 'error');
+    // REHABILITAR botón
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+    return;
+  }
+  
+  // Validar longitudes
+  if (datos['Código'].length > 50) {
+    mostrarNotificacion('El código no puede tener más de 50 caracteres', 'error');
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+    return;
+  }
+  
+  if (datos['Descripción'].length > 200) {
+    mostrarNotificacion('La descripción no puede tener más de 200 caracteres', 'error');
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+    return;
+  }
+  
+  mostrarLoading(true);
+  
+  const timeoutId = setTimeout(() => {
+    mostrarLoading(false);
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+    mostrarNotificacion('El registro está tardando demasiado. Intente nuevamente.', 'warning');
+  }, 10000);
+  
+  timeoutIds.push(timeoutId);
+  
+  google.script.run
+    .withSuccessHandler((resultado) => {
+      clearTimeout(timeoutId);
+      respuestaGuardar(resultado, btnGuardar, textoOriginal);
+    })
+    .withFailureHandler((error) => {
+      clearTimeout(timeoutId);
+      errorGuardar(error, btnGuardar, textoOriginal);
+    })
+    .registrarSalida(datos);
+}
+
+function respuestaGuardar(resultado, btnGuardar, textoOriginal) {
+  console.log('📝 Respuesta de guardar:', resultado);
+  console.log('📝 Tipo de respuesta:', typeof resultado);
+  mostrarLoading(false);
+  
+  // REHABILITAR botón siempre
+  if (btnGuardar) {
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+  }
+  
+  // ✅ CORRECCIÓN MEJORADA: Manejar tanto objetos como strings JSON
+  let respuestaFinal = resultado;
+  
+  // Si es string, intentar parsear
+  if (typeof resultado === 'string') {
+    try {
+      respuestaFinal = JSON.parse(resultado);
+      console.log('📊 Respuesta parseada:', respuestaFinal);
+    } catch (e) {
+      console.error('❌ Error parseando JSON:', e);
+      mostrarNotificacion('Error: Respuesta inválida del servidor', 'error');
+      return;
+    }
+  }
+  
+  if (!respuestaFinal || typeof respuestaFinal !== 'object') {
+    console.error('❌ Error: Respuesta inválida:', respuestaFinal);
+    mostrarNotificacion('Error: Formato de respuesta inválido', 'error');
+    return;
+  }
+  
+  // ✅ VERIFICAR SI FUE EXITOSO
+  if (respuestaFinal.success === true) {
+    console.log('✅ Registro exitoso, ID:', respuestaFinal.id);
+    
+    // 1. Cerrar el modal
+    cerrarModalRegistro();
+    
+    // 2. Limpiar el formulario
+    document.getElementById('formRegistro').reset();
+    
+    // 3. Mostrar alerta de ÉXITO (verde)
+    mostrarNotificacion(`✅ Salida registrada correctamente con ID: ${respuestaFinal.id}`, 'success');
+    
+    // 4. Actualizar el dashboard automáticamente
+    setTimeout(() => {
+      cargarDashboard();
+    }, 1500); // Esperar 1.5 segundos antes de actualizar
+    
+  } else {
+    // ❌ Mostrar error si falló
+    console.error('❌ Error en registro:', respuestaFinal.message);
+    mostrarNotificacion('❌ Error al registrar: ' + (respuestaFinal.message || 'Error desconocido'), 'error');
+  }
+}
+
+function errorGuardar(error, btnGuardar, textoOriginal) {
+  mostrarLoading(false);
+  
+  // REHABILITAR botón siempre
+  if (btnGuardar) {
+    btnGuardar.innerHTML = textoOriginal;
+    btnGuardar.disabled = false;
+  }
+  
+  console.error('❌ Error del servidor:', error);
+  mostrarNotificacion('Error del servidor: ' + (error.message || 'Error desconocido'), 'error');
+}
+</script>

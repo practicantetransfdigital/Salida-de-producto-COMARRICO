@@ -1,0 +1,240 @@
+<script>
+    function actualizarEstadisticas(stats) {
+  if (!stats) {
+    console.warn('⚠️ Stats es null o undefined');
+    stats = {
+      totalSalidas: 0,
+      porEstado: {}
+    };
+  }
+  
+  document.getElementById('totalSalidas').textContent = stats.totalSalidas || 0;
+  document.getElementById('enRevision').textContent = (stats.porEstado && stats.porEstado['En Revisión']) || 0;
+  document.getElementById('devueltos').textContent = (stats.porEstado && stats.porEstado['Devuelto']) || 0;
+  document.getElementById('pendientes').textContent = (stats.porEstado && stats.porEstado['Pendiente por Devolución']) || 0;
+}
+
+function crearGraficos(stats) {
+  if (!stats) {
+    console.warn('⚠️ No hay estadísticas para crear gráficos');
+    return;
+  }
+  
+  // Destruir gráficos anteriores
+  Object.values(charts).forEach(chart => {
+    if (chart && typeof chart.destroy === 'function') {
+      chart.destroy();
+    }
+  });
+  charts = {};
+  
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          font: {
+            family: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            size: 12
+          },
+          padding: 15
+        }
+      }
+    }
+  };
+  
+  const coloresCalidos = [
+    '#FDB913', '#F59E0B', '#FBBF24', '#FCD34D', 
+    '#FDE047', '#FEF08A', '#FFE5B4', '#FFDAB9'
+  ];
+  
+  // Gráfico de Tipo de Salida
+  crearGraficoIndividual(
+    'chartTipoSalida', 
+    'doughnut', 
+    stats.porTipoSalida, 
+    coloresCalidos,
+    commonOptions
+  );
+  
+  // Gráfico de Tipo de Plaga
+  crearGraficoIndividual(
+    'chartTipoPlaga',
+    'bar',
+    stats.porTipoPlaga,
+    ['#FDB913'],
+    {
+      ...commonOptions,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1 }
+        }
+      }
+    }
+  );
+  
+  // Gráfico de Pasillo
+  crearGraficoIndividual(
+    'chartPasillo',
+    'bar',
+    stats.porPasillo,
+    ['#F59E0B'],
+    {
+      ...commonOptions,
+      indexAxis: 'y',
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { stepSize: 1 }
+        }
+      }
+    }
+  );
+  
+  // Gráfico de Estado
+  crearGraficoIndividual(
+    'chartEstado',
+    'pie',
+    stats.porEstado,
+    coloresCalidos,
+    commonOptions
+  );
+}
+
+function crearGraficoIndividual(canvasId, tipo, datos, colores, opciones) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) {
+    console.error(`❌ No se encontró el canvas: ${canvasId}`);
+    return;
+  }
+  
+  // Limpiar canvas anterior
+  const parent = canvas.parentElement;
+  const nuevoCanvas = document.createElement('canvas');
+  nuevoCanvas.id = canvasId;
+  nuevoCanvas.style.width = '100%';
+  nuevoCanvas.style.height = '300px';
+  parent.innerHTML = '';
+  parent.appendChild(nuevoCanvas);
+  
+  if (!datos || Object.keys(datos).length === 0) {
+    parent.innerHTML += '<p style="text-align: center; color: var(--gray-400); padding: 40px;">No hay datos disponibles</p>';
+    return;
+  }
+  
+  // CORRECCIÓN ESPECIAL PARA PLAGAS: Filtrar valores cero o nulos
+  const datosFiltrados = {};
+  Object.keys(datos).forEach(key => {
+    if (datos[key] > 0) {
+      datosFiltrados[key] = datos[key];
+    }
+  });
+  
+  if (Object.keys(datosFiltrados).length === 0) {
+    parent.innerHTML += '<p style="text-align: center; color: var(--gray-400); padding: 40px;">No hay datos de plagas registradas</p>';
+    return;
+  }
+  
+  const ctx = nuevoCanvas.getContext('2d');
+  
+  try {
+    charts[canvasId] = new Chart(ctx, {
+      type: tipo,
+      data: {
+        labels: Object.keys(datosFiltrados),
+        datasets: [{
+          label: canvasId === 'chartTipoPlaga' ? 'Tipos de Plaga' : (tipo === 'bar' ? 'Cantidad' : ''),
+          data: Object.values(datosFiltrados),
+          backgroundColor: colores,
+          borderWidth: 2,
+          borderColor: '#fff',
+          borderRadius: tipo === 'bar' ? 8 : 0
+        }]
+      },
+      options: opciones
+    });
+  } catch (error) {
+    console.error(`❌ Error creando gráfico ${canvasId}:`, error);
+    parent.innerHTML += '<p style="text-align: center; color: var(--error); padding: 20px;">Error al crear gráfico</p>';
+  }
+}
+
+function cargarTabla(registros) {
+  const tbody = document.getElementById('tablaRegistrosBody');
+  if (!tbody) {
+    console.error('❌ No se encontró el tbody de la tabla');
+    return;
+  }
+  
+  tbody.innerHTML = '';
+  
+  if (!registros || registros.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--gray-400); padding: 40px;">No hay registros disponibles</td></tr>';
+    return;
+  }
+  
+  registros.forEach(registro => {
+    const tr = document.createElement('tr');
+    const estadoBadge = obtenerBadgeEstado(registro.Estado);
+    
+    tr.innerHTML = `
+      <td><strong>${registro.Código || '-'}</strong></td>
+      <td>${registro.Descripción || '-'}</td>
+      <td>${registro['Tipo de Salida'] || '-'}</td>
+      <td>${formatearFecha(registro['Fecha y Hora de Retiro'])}</td>
+      <td>${registro.Responsable || '-'}</td>
+      <td><span class="badge ${estadoBadge}">${registro.Estado || '-'}</span></td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="verDetalle(${registro.ID || 0})">
+          <i class="fas fa-eye"></i> Ver
+        </button>
+      </td>
+    `;
+    
+    tbody.appendChild(tr);
+  });
+}
+
+function cargarOpcionesFormulario() {
+  google.script.run
+    .withSuccessHandler((opciones) => {
+      if (!opciones || typeof opciones !== 'object') {
+        console.error('❌ Opciones inválidas:', opciones);
+        return;
+      }
+      
+      llenarSelect('tipoSalida', opciones.tiposSalida);
+      llenarSelect('tipoPlaga', opciones.tiposPlagas);
+      llenarSelect('estado', opciones.estados);
+    })
+    .withFailureHandler((error) => {
+      console.error('❌ Error al cargar opciones:', error);
+      // Usar opciones por defecto
+      llenarSelect('tipoSalida', ['Control de Calidad', 'Gasificación', 'Destrucción', 'Para Revisión', 'Reproceso', 'Devolución a Proveedor', 'Otro']);
+      llenarSelect('tipoPlaga', ['N/A', 'Insectos', 'Roedores', 'Hongos', 'Contaminación', 'Otro']);
+      llenarSelect('estado', ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido']);
+    })
+    .obtenerOpciones();
+}
+
+function llenarSelect(selectId, opciones) {
+  const select = document.getElementById(selectId);
+  if (!select || !opciones || !Array.isArray(opciones)) {
+    console.error(`❌ No se pudo llenar select ${selectId}`, opciones);
+    return;
+  }
+  
+  // Limpiar opciones existentes (excepto la primera si existe)
+  select.innerHTML = '';
+  
+  opciones.forEach(opcion => {
+    const option = document.createElement('option');
+    option.value = opcion;
+    option.textContent = opcion;
+    select.appendChild(option);
+  });
+}
+</script>

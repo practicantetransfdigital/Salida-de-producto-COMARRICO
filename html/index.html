@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Salidas de Producto</title>
+  <!-- Agregando Font Awesome para iconos profesionales -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <?!= HtmlService.createHtmlOutputFromFile('html/styles').getContent(); ?>
+</head>
+<body>
+  <!-- PANTALLA DE LOGIN -->
+  <div id="loginScreen" class="screen active">
+    <div class="login-container">
+      <div class="login-card">
+        <div class="login-form">
+          <div class="logo">
+            <!-- Reemplazando emoji con icono Font Awesome -->
+            <div class="logo-icon">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <h1>Sistema de Salidas</h1>
+            <p>Gestión de Productos</p>
+          </div>
+          
+          <form id="loginForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="usuario"><i class="fas fa-user"></i> Usuario</label>
+              <input type="text" id="usuario" placeholder="Ingrese su usuario" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="contrasena"><i class="fas fa-lock"></i> Contraseña</label>
+              <input type="password" id="contrasena" placeholder="Ingrese su contraseña" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block" onclick="iniciarSesion()">
+              <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+            </button>
+          </form>
+          
+          <div id="loginError" class="error-message" style="display: none;"></div>
+        </div>
+        
+        <div class="login-image">
+          <div class="login-image-content">
+            <!-- Agregando icono al lado de bienvenida -->
+            <i class="fas fa-warehouse" style="font-size: 64px; margin-bottom: 24px;"></i>
+            <h2>Bienvenido</h2>
+            <p>Sistema integral de gestión y control de salidas de producto</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANTALLA PRINCIPAL -->
+  <div id="mainScreen" class="screen">
+    <!-- NAVBAR -->
+    <nav class="navbar">
+      <div class="navbar-brand">
+        <!-- Reemplazando emoji con icono -->
+        <i class="fas fa-boxes navbar-icon"></i>
+        <span>Sistema de Salidas</span>
+      </div>
+      <div class="navbar-user">
+        <i class="fas fa-user-circle" style="font-size: 20px; color: var(--gray-600);"></i>
+        <span id="userName">Usuario</span>
+        <span id="userRole" class="badge"></span>
+        <button class="btn-icon" onclick="cerrarSesion()" title="Cerrar Sesión">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="main-content">
+      <!-- HEADER CON BOTÓN -->
+      <div class="content-header">
+        <div>
+          <h2>Salida de productos - COMARRICO</h2>
+          <p>Resumen y estadísticas de salidas de producto</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <!-- Agregando botón de refrescar sutil -->
+          <button class="btn-icon" onclick="cargarDashboard()" title="Refrescar Dashboard" style="background: var(--white); border: 1px solid var(--gray-200); padding: 10px 16px; border-radius: 8px;">
+            <i class="fas fa-sync-alt" style="color: var(--gray-600);"></i>
+          </button>
+          <button class="btn btn-primary" onclick="abrirModalRegistro()">
+            <i class="fas fa-plus-circle"></i> Registrar Salida
+          </button>
+        </div>
+      </div>
+
+      <!-- TARJETAS DE ESTADÍSTICAS -->
+      <div class="stats-grid">
+        <!-- Reemplazando todos los emojis con iconos Font Awesome -->
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #FFF4CC;">
+            <i class="fas fa-chart-line" style="color: var(--primary-yellow);"></i>
+          </div>
+          <div class="stat-content">
+            <h3 id="totalSalidas">0</h3>
+            <p>Total de Salidas</p>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #FFE5B4;">
+            <i class="fas fa-search" style="color: #F59E0B;"></i>
+          </div>
+          <div class="stat-content">
+            <h3 id="enRevision">0</h3>
+            <p>En Revisión</p>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #FFF8DC;">
+            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+          </div>
+          <div class="stat-content">
+            <h3 id="devueltos">0</h3>
+            <p>Devueltos</p>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #FFFACD;">
+            <i class="fas fa-clock" style="color: var(--warning);"></i>
+          </div>
+          <div class="stat-content">
+            <h3 id="pendientes">0</h3>
+            <p>Pendientes</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRÁFICOS -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3><i class="fas fa-chart-pie"></i> Tipo de Salida</h3>
+          <canvas id="chartTipoSalida"></canvas>
+        </div>
+        
+        <div class="chart-card">
+          <h3><i class="fas fa-bug"></i> Tipo de Plaga/Hallazgo</h3>
+          <canvas id="chartTipoPlaga"></canvas>
+        </div>
+        
+        <div class="chart-card">
+          <h3><i class="fas fa-map-marker-alt"></i> Pasillos con Mayor Frecuencia</h3>
+          <canvas id="chartPasillo"></canvas>
+        </div>
+        
+        <div class="chart-card">
+          <h3><i class="fas fa-tasks"></i> Estado de Productos</h3>
+          <canvas id="chartEstado"></canvas>
+        </div>
+      </div>
+
+      <!-- TABLA DE ÚLTIMOS REGISTROS -->
+      <div class="table-container">
+        <h3><i class="fas fa-history"></i> Últimos Movimientos</h3>
+        <div class="table-responsive">
+          <table id="tablaRegistros">
+            <thead>
+              <tr>
+                <th><i class="fas fa-barcode"></i> Código</th>
+                <th><i class="fas fa-file-alt"></i> Descripción</th>
+                <th><i class="fas fa-tag"></i> Tipo de Salida</th>
+                <th><i class="fas fa-calendar"></i> Fecha</th>
+                <th><i class="fas fa-user"></i> Responsable</th>
+                <th><i class="fas fa-flag"></i> Estado</th>
+                <th><i class="fas fa-cog"></i> Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaRegistrosBody">
+              <!-- Datos dinámicos -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL DE REGISTRO -->
+  <div id="modalRegistro" class="modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2><i class="fas fa-clipboard-list"></i> Registrar Salida de Producto</h2>
+        <button class="modal-close" onclick="cerrarModalRegistro()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <form id="formRegistro" onsubmit="return false;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="codigo"><i class="fas fa-barcode"></i> Código de Producto *</label>
+            <input type="text" id="codigo" placeholder="Ej: PROD-001" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="descripcion"><i class="fas fa-file-alt"></i> Descripción *</label>
+            <input type="text" id="descripcion" placeholder="Descripción del producto" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="tipoSalida"><i class="fas fa-tag"></i> Tipo de Salida *</label>
+            <select id="tipoSalida" required>
+              <option value="">Seleccione...</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="tipoPlaga"><i class="fas fa-bug"></i> Tipo de Plaga/Hallazgo</label>
+            <select id="tipoPlaga">
+              <option value="N/A">N/A</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="responsable"><i class="fas fa-user"></i> Responsable del Retiro *</label>
+            <input type="text" id="responsable" placeholder="Nombre del responsable" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="pasillo"><i class="fas fa-map-marker-alt"></i> Pasillo/Ubicación *</label>
+            <input type="text" id="pasillo" placeholder="Ej: A-12" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="tiempoRetorno"><i class="fas fa-clock"></i> Tiempo Estimado de Retorno</label>
+            <input type="text" id="tiempoRetorno" placeholder="Ej: 2 días">
+          </div>
+          
+          <div class="form-group">
+            <label for="estado"><i class="fas fa-flag"></i> Estado *</label>
+            <select id="estado" required>
+              <option value="">Seleccione...</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalRegistro()">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" onclick="guardarRegistro()">
+            <i class="fas fa-save"></i> Guardar Registro
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- LOADING SPINNER -->
+  <div id="loadingSpinner" class="loading-spinner">
+    <div class="spinner"></div>
+    <p>Cargando...</p>
+  </div>
+  
+  <!-- MODAL PARA VER DETALLES Y EDITAR ESTADO -->
+<div id="modalDetalles" class="modal">
+  <div class="modal-content modal-large">
+    <div class="modal-header">
+      <h2><i class="fas fa-eye"></i> Detalles de Salida - <span id="tituloCodigo">Código</span></h2>
+      <button class="modal-close" onclick="cerrarModalDetalles()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Pestañas para Detalles y Edición -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="cambiarPestania('detalles')">
+          <i class="fas fa-info-circle"></i> Detalles
+        </button>
+        <button class="tab-btn" onclick="cambiarPestania('editar')">
+          <i class="fas fa-edit"></i> Editar Estado
+        </button>
+      </div>
+      
+      <!-- Contenido de Detalles -->
+      <div id="contenidoDetalles" class="tab-content active">
+        <div class="detalles-grid">
+          <!-- Información Básica -->
+          <div class="detalle-grupo">
+            <h3><i class="fas fa-info-circle"></i> Información Básica</h3>
+            <div class="detalle-item">
+              <label>ID de Registro:</label>
+              <span id="detalleId" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Código:</label>
+              <span id="detalleCodigo" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Descripción:</label>
+              <span id="detalleDescripcion" class="valor-detalle">-</span>
+            </div>
+          </div>
+          
+          <!-- Tipo y Estado -->
+          <div class="detalle-grupo">
+            <h3><i class="fas fa-tags"></i> Clasificación</h3>
+            <div class="detalle-item">
+              <label>Tipo de Salida:</label>
+              <span id="detalleTipoSalida" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Tipo de Plaga/Hallazgo:</label>
+              <span id="detalleTipoPlaga" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Estado Actual:</label>
+              <span id="detalleEstado" class="badge">-</span>
+            </div>
+          </div>
+          
+          <!-- Responsable y Ubicación -->
+          <div class="detalle-grupo">
+            <h3><i class="fas fa-user-location"></i> Responsable y Ubicación</h3>
+            <div class="detalle-item">
+              <label>Responsable:</label>
+              <span id="detalleResponsable" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Pasillo/Ubicación:</label>
+              <span id="detallePasillo" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Tiempo Estimado de Retorno:</label>
+              <span id="detalleTiempoRetorno" class="valor-detalle">-</span>
+            </div>
+          </div>
+          
+          <!-- Fechas -->
+          <div class="detalle-grupo">
+            <h3><i class="fas fa-calendar-alt"></i> Fechas</h3>
+            <div class="detalle-item">
+              <label>Fecha y Hora de Retiro:</label>
+              <span id="detalleFecha" class="valor-detalle">-</span>
+            </div>
+            <div class="detalle-item">
+              <label>Registrado hace:</label>
+              <span id="detalleTiempoTranscurrido" class="valor-detalle">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Contenido de Edición -->
+      <div id="contenidoEditar" class="tab-content">
+        <div class="formulario-edicion">
+          <div class="form-group">
+            <label for="editarEstado"><i class="fas fa-flag"></i> Nuevo Estado *</label>
+            <select id="editarEstado" class="form-control">
+              <option value="">Seleccione nuevo estado...</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="editarObservaciones"><i class="fas fa-sticky-note"></i> Observaciones (Opcional)</label>
+            <textarea 
+              id="editarObservaciones" 
+              class="form-control" 
+              placeholder="Agregue observaciones sobre el cambio de estado..."
+              rows="4"
+            ></textarea>
+          </div>
+          
+          <div class="resumen-cambio">
+            <h4><i class="fas fa-sync-alt"></i> Resumen del Cambio</h4>
+            <div class="cambio-estado">
+              <span id="estadoActualTexto" class="badge badge-warning">En Revisión</span>
+              <i class="fas fa-arrow-right"></i>
+              <span id="estadoNuevoTexto" class="badge badge-info">Seleccione estado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="cerrarModalDetalles()">
+        <i class="fas fa-times"></i> Cerrar
+      </button>
+      <button type="button" class="btn btn-primary" onclick="guardarCambioEstado()" id="btnGuardarCambio">
+        <i class="fas fa-save"></i> Guardar Cambio
+      </button>
+    </div>
+  </div>
+</div>
+
+  <?!= HtmlService.createHtmlOutputFromFile('functions/Auxiliars').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/Dashboard').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/Form').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/global').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/grafics').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/initialization').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/state').getContent(); ?>
+
+  
+
+</body>
+</html>
