@@ -65,11 +65,11 @@
       
       <!-- Agregando menú de navegación con historial vencidos -->
       <div class="navbar-menu">
-        <button class="nav-btn active" onclick="mostrarSeccion('dashboard')" id="btnDashboard">
+        <button class="nav-btn active" data-seccion="dashboard" id="btnDashboard" onclick="cargarDashboard()">
           <i class="fas fa-home"></i>
           <span>Dashboard</span>
         </button>
-        <button class="nav-btn" onclick="mostrarSeccion('vencidos')" id="btnVencidos">
+        <button class="nav-btn" data-seccion="vencidos" id="btnVencidos" onclick="refrescarVencidos()">
           <i class="fas fa-exclamation-triangle"></i>
           <span>Historial Vencidos</span>
           <span class="badge-count" id="contadorVencidos" style="display: none;">0</span>
@@ -170,6 +170,11 @@
           <h3><i class="fas fa-tasks"></i> Estado de Productos</h3>
           <canvas id="chartEstado"></canvas>
         </div>
+
+      <div class="chart-card">
+        <h3><i class="fas fa-crosshairs"></i> Sitios con Más Plagas</h3>
+        <canvas id="chartPlagasPorUbicacion"></canvas>
+      </div>
       </div>
 
       <!-- TABLA DE ÚLTIMOS REGISTROS -->
@@ -182,7 +187,8 @@
                 <th><i class="fas fa-barcode"></i>  Código</th>
                 <th><i class="fas fa-box"></i>  Producto</th>
                 <th><i class="fas fa-tag"></i>  Tipo de Salida</th>
-                <th><i class="fas fa-calendar"></i>  Fecha</th>
+                <th><i class="fas fa-calendar"></i>  F. Retiro</th>
+                <th><i class="fas fa-calendar"></i>  F. Retorno</th>
                 <th><i class="fas fa-user"></i>  Responsable</th>
                 <th><i class="fas fa-flag"></i>  Estado</th>
                 <th><i class="fas fa-cog"></i>  Acciones</th>
@@ -205,7 +211,7 @@
           <p>Listado de productos con fecha de retorno vencida</p>
         </div>
         <div style="display: flex; gap: 12px;">
-          <button class="btn-icon" onclick="cargarHistorialVencidos()" title="Refrescar" style="background: var(--white); border: 1px solid var(--gray-200); padding: 10px 16px; border-radius: 8px;">
+          <button class="btn-icon" onclick="refrescarVencidos()" title="Refrescar" style="background: var(--white); border: 1px solid var(--gray-200); padding: 10px 16px; border-radius: 8px;">
             <i class="fas fa-sync-alt" style="color: var(--gray-600);"></i>
           </button>
           <div class="filtro-vencidos">
@@ -575,6 +581,88 @@
       </div>
     </div>
   </div>
+
+  <!-- MODAL EDICIÓN SIMPLIFICADO - Sin estado, con ubicación -->
+<div id="modalEdicionCompleta" class="modal" style="display: none;">
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3><i class="fas fa-edit"></i> Editar Salida de Producto</h3>
+      <button class="modal-close" onclick="cerrarModalEdicion()">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="form-container">
+        <form id="formEdicionCompleta" onsubmit="guardarEdicionCompleta(event)">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editCodigo"><i class="fas fa-barcode"></i> Código *</label>
+              <input type="text" id="editCodigo" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editNombreProducto"><i class="fas fa-cube"></i> Nombre del Producto *</label>
+              <input type="text" id="editNombreProducto" class="form-control" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editDescripcion"><i class="fas fa-file-alt"></i> Descripción *</label>
+              <input type="text" id="editDescripcion" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editTipoSalida"><i class="fas fa-sign-out-alt"></i> Tipo de Salida *</label>
+              <input type="text" id="editTipoSalida" class="form-control" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editTipoPlaga"><i class="fas fa-bug"></i> Tipo de Plaga/Hallazgo</label>
+              <input type="text" id="editTipoPlaga" class="form-control">
+            </div>
+            
+            <div class="form-group">
+              <label for="editResponsable"><i class="fas fa-user"></i> Responsable *</label>
+              <input type="text" id="editResponsable" class="form-control" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editPasillo"><i class="fas fa-map-marker-alt"></i> Pasillo/Ubicación *</label>
+              <input type="text" id="editPasillo" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editFechaRetorno"><i class="fas fa-calendar-check"></i> Fecha Estimada de Retorno *</label>
+              <input type="date" id="editFechaRetorno" class="form-control" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <!-- REMOVIDO: Campo de Estado -->
+            <div class="form-group">
+              <label for="editFechaRetiro"><i class="fas fa-calendar-alt"></i> Fecha de Retiro *</label>
+              <input type="datetime-local" id="editFechaRetiro" class="form-control" required>
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModalEdicion()">
+              <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
   
   <?!= HtmlService.createHtmlOutputFromFile('functions/auth').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/auxiliars').getContent(); ?>
@@ -590,6 +678,9 @@
   <?!= HtmlService.createHtmlOutputFromFile('functions/tablehistory').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/variables').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/vencidos').getContent(); ?>
-  
+  <?!= HtmlService.createHtmlOutputFromFile('functions/editmodal').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/calculate').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/normalization').getContent(); ?>
+
 </body>
 </html>

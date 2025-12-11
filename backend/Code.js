@@ -476,3 +476,282 @@ function obtenerObservacionesRegistro(idRegistro) {
     });
   }
 }
+
+// ============================================================
+// ACTUALIZAR REGISTRO COMPLETO
+// ============================================================
+
+function actualizarRegistroCompleto(datosActualizados) {
+  Logger.log('✏️ Actualizando registro completo:', datosActualizados);
+  
+  try {
+    const sheet = getSheet('SALIDAS');
+    const data = sheet.getDataRange().getValues();
+    
+    let filaIndex = -1;
+    
+    // Buscar la fila con el ID
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] == datosActualizados.ID) {
+        filaIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (filaIndex === -1) {
+      return { success: false, message: 'No se encontró el registro' };
+    }
+    
+    // Mapear campos a columnas
+    const columnas = {
+      'Código': 2,               // Columna B
+      'NombreProducto': 3,       // Columna C
+      'Descripción': 4,          // Columna D
+      'Tipo de Salida': 5,       // Columna E
+      'Tipo de Plaga/Hallazgo': 6, // Columna F
+      'Responsable': 8,          // Columna H
+      'Pasillo/Ubicación': 9,    // Columna I
+      'Tiempo Estimado de Retorno': 10, // Columna J
+      'Fecha y Hora de Retiro': 7      // Columna G
+    };
+    
+    // Actualizar cada campo
+    for (const [campo, columna] of Object.entries(columnas)) {
+      if (datosActualizados[campo] !== undefined) {
+        const valor = datosActualizados[campo];
+        
+        // CORRECCIÓN: Para fechas, usar el valor tal como viene
+        // Ya viene formateado como dd/mm/yyyy o dd/mm/yyyy HH:mm
+        sheet.getRange(filaIndex, columna).setValue(valor);
+        Logger.log(`✅ Actualizado ${campo} en columna ${columna}: ${valor}`);
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: 'Registro actualizado correctamente',
+      id: datosActualizados.ID
+    };
+    
+  } catch (error) {
+    Logger.log('❌ Error actualizando registro completo: ' + error.toString());
+    return { success: false, message: 'Error: ' + error.message };
+  }
+}
+
+// Función para formatear fecha para input datetime-local
+function formatearFechaParaInput(fechaStr, esSoloFecha = false) {
+  if (!fechaStr) return '';
+  
+  try {
+    let fecha;
+    
+    // Si viene como dd/mm/yyyy HH:mm
+    if (fechaStr.includes('/') && fechaStr.includes(':')) {
+      const [fechaPart, horaPart] = fechaStr.split(' ');
+      const [dia, mes, año] = fechaPart.split('/');
+      const [horas, minutos] = horaPart.split(':');
+      
+      fecha = new Date(
+        parseInt(año),
+        parseInt(mes) - 1,
+        parseInt(dia),
+        parseInt(horas),
+        parseInt(minutos)
+      );
+    }
+    // Si viene como dd/mm/yyyy
+    else if (fechaStr.includes('/')) {
+      const [dia, mes, año] = fechaStr.split('/');
+      fecha = new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia));
+    }
+    // Si ya es objeto Date
+    else if (fechaStr instanceof Date) {
+      fecha = fechaStr;
+    }
+    // Cualquier otro formato
+    else {
+      fecha = new Date(fechaStr);
+    }
+    
+    if (isNaN(fecha.getTime())) return '';
+    
+    // Formatear según el tipo de input
+    if (esSoloFecha) {
+      // Para input type="date" (YYYY-MM-DD)
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } else {
+      // Para input type="datetime-local" (YYYY-MM-DDTHH:mm)
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      const hours = String(fecha.getHours()).padStart(2, '0');
+      const minutes = String(fecha.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+  } catch (error) {
+    console.error('Error formateando fecha:', error);
+    return '';
+  }
+}
+
+// ============================================
+// GOOGLE APPS SCRIPT - FUNCIONES DEL SERVIDOR
+// ============================================
+
+/**
+ * Normaliza una ubicación (igual que en JavaScript)
+ */
+function normalizarUbicacionAppsScript(texto) {
+  if (!texto || typeof texto !== 'string') return 'SIN ESPECIFICAR';
+  
+  // Convertir a mayúsculas
+  let normalizado = texto.toUpperCase();
+  
+  // Quitar tildes
+  normalizado = normalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  // Eliminar caracteres especiales
+  normalizado = normalizado.replace(/[^A-Z0-9\s\-]/g, '');
+  
+  // Eliminar espacios múltiples
+  normalizado = normalizado.replace(/\s+/g, ' ').trim();
+  
+  return normalizado || 'SIN ESPECIFICAR';
+}
+
+/**
+ * Función para normalizar todos los registros existentes
+ */
+function normalizarTodosLosRegistros() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registros');
+    if (!sheet) {
+      return { success: false, message: 'No se encontró la hoja de registros' };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Encontrar índice de la columna de ubicación
+    const ubicacionIndex = headers.indexOf('Pasillo/Ubicación');
+    
+    if (ubicacionIndex === -1) {
+      return { success: false, message: 'No se encontró la columna Pasillo/Ubicación' };
+    }
+    
+    let cambios = 0;
+    
+    // Normalizar desde la fila 2 (después de headers)
+    for (let i = 1; i < data.length; i++) {
+      const valorOriginal = data[i][ubicacionIndex];
+      
+      if (valorOriginal && typeof valorOriginal === 'string') {
+        const valorNormalizado = normalizarUbicacionAppsScript(valorOriginal);
+        
+        // Solo actualizar si hay cambio
+        if (valorOriginal !== valorNormalizado) {
+          sheet.getRange(i + 1, ubicacionIndex + 1).setValue(valorNormalizado);
+          cambios++;
+          
+          // Actualizar también la columna Pasillo si existe
+          const pasilloIndex = headers.indexOf('Pasillo');
+          if (pasilloIndex !== -1) {
+            sheet.getRange(i + 1, pasilloIndex + 1).setValue(valorNormalizado);
+          }
+        }
+      }
+    }
+    
+    // También normalizar columnas de Responsable y Tipo de Salida
+    const responsableIndex = headers.indexOf('Responsable');
+    if (responsableIndex !== -1) {
+      for (let i = 1; i < data.length; i++) {
+        const valor = data[i][responsableIndex];
+        if (valor && typeof valor === 'string') {
+          sheet.getRange(i + 1, responsableIndex + 1).setValue(valor.toUpperCase());
+        }
+      }
+    }
+    
+    const tipoSalidaIndex = headers.indexOf('Tipo de Salida');
+    if (tipoSalidaIndex !== -1) {
+      for (let i = 1; i < data.length; i++) {
+        const valor = data[i][tipoSalidaIndex];
+        if (valor && typeof valor === 'string') {
+          sheet.getRange(i + 1, tipoSalidaIndex + 1).setValue(valor.toUpperCase());
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      message: `Normalizados ${cambios} registros de ubicación y otros campos`,
+      totalRegistros: data.length - 1
+    };
+    
+  } catch (error) {
+    console.error('Error normalizando registros:', error);
+    return {
+      success: false,
+      message: error.toString()
+    };
+  }
+}
+
+/**
+ * Función para obtener estadísticas cruzadas
+ */
+function obtenerEstadisticasCruzadas() {
+  try {
+    const registros = obtenerRegistrosCompletos();
+    
+    const estadisticas = {
+      topUbicaciones: [],
+      ubicacionesConPlagas: {},
+      conteoTotal: {}
+    };
+    
+    // Procesar registros
+    registros.forEach(registro => {
+      const ubicacion = registro['Pasillo/Ubicación'] || 'SIN ESPECIFICAR';
+      const plaga = registro['Tipo de Plaga/Hallazgo'] || 'N/A';
+      
+      if (plaga && plaga !== 'N/A' && plaga !== 'Sin novedad') {
+        // Conteo total por ubicación
+        estadisticas.conteoTotal[ubicacion] = (estadisticas.conteoTotal[ubicacion] || 0) + 1;
+        
+        // Detalle por ubicación y plaga
+        if (!estadisticas.ubicacionesConPlagas[ubicacion]) {
+          estadisticas.ubicacionesConPlagas[ubicacion] = {};
+        }
+        
+        estadisticas.ubicacionesConPlagas[ubicacion][plaga] = 
+          (estadisticas.ubicacionesConPlagas[ubicacion][plaga] || 0) + 1;
+      }
+    });
+    
+    // Ordenar ubicaciones por cantidad
+    const topUbicaciones = Object.entries(estadisticas.conteoTotal)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([ubicacion, cantidad]) => ({ ubicacion, cantidad }));
+    
+    estadisticas.topUbicaciones = topUbicaciones;
+    
+    return {
+      success: true,
+      data: estadisticas
+    };
+    
+  } catch (error) {
+    console.error('Error obteniendo estadísticas cruzadas:', error);
+    return {
+      success: false,
+      message: error.toString()
+    };
+  }
+}

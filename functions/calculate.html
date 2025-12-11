@@ -1,0 +1,294 @@
+<script>
+// ============================================
+// FUNCIONES PARA GRÁFICA DE PLAGAS POR SITIO
+// ============================================
+
+
+function calcularEstadisticasCruzadas(registros) {
+  if (!registros || !Array.isArray(registros) || registros.length === 0) {
+    console.log('⚠️ No hay registros para estadísticas cruzadas');
+    return { 
+      topUbicaciones: [], 
+      ubicacionesConPlagas: {},
+      conteoTotal: {} 
+    };
+  }
+  
+  console.log('🔍 Calculando estadísticas cruzadas de', registros.length, 'registros');
+  
+  const estadisticas = {
+    topUbicaciones: [],          // Top 10 ubicaciones con más plagas
+    ubicacionesConPlagas: {},    // Detalle de plagas por ubicación
+    conteoTotal: {},             // Conteo total por ubicación
+    todasLasPlagas: new Set()    // Set de todas las plagas únicas
+  };
+  
+  // 1. Procesar todos los registros
+  registros.forEach((registro, index) => {
+    // Obtener ubicación (ya debería estar normalizada)
+    const ubicacion = registro['Pasillo/Ubicación'] || registro.Pasillo || 'SIN ESPECIFICAR';
+    
+    // Obtener plaga
+    const plaga = registro['Tipo de Plaga/Hallazgo'] || registro['Tipo de Plaga'] || 'N/A';
+    
+    // Solo contar si hay una plaga válida (no N/A, no vacía)
+    if (plaga && plaga !== 'N/A' && plaga !== '' && plaga !== 'Sin novedad') {
+      
+      // 1A. Incrementar conteo total por ubicación
+      estadisticas.conteoTotal[ubicacion] = (estadisticas.conteoTotal[ubicacion] || 0) + 1;
+      
+      // 1B. Guardar detalle por ubicación y plaga
+      if (!estadisticas.ubicacionesConPlagas[ubicacion]) {
+        estadisticas.ubicacionesConPlagas[ubicacion] = {};
+      }
+      
+      estadisticas.ubicacionesConPlagas[ubicacion][plaga] = 
+        (estadisticas.ubicacionesConPlagas[ubicacion][plaga] || 0) + 1;
+      
+      // 1C. Agregar plaga al conjunto de plagas únicas
+      estadisticas.todasLasPlagas.add(plaga);
+    }
+  });
+  
+  console.log('📍 Ubicaciones encontradas:', Object.keys(estadisticas.conteoTotal).length);
+  console.log('🐜 Plagas únicas encontradas:', estadisticas.todasLasPlagas.size);
+  
+  // 2. Ordenar ubicaciones por cantidad de plagas (descendente)
+  const ubicacionesOrdenadas = Object.entries(estadisticas.conteoTotal)
+    .filter(([ubicacion, cantidad]) => cantidad > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10); // Tomar top 10
+  
+  // 3. Formatear top ubicaciones
+  estadisticas.topUbicaciones = ubicacionesOrdenadas.map(([ubicacion, cantidad]) => ({
+    ubicacion,
+    cantidad
+  }));
+  
+  console.log('🏆 Top 10 ubicaciones:', estadisticas.topUbicaciones);
+  
+  return estadisticas;
+}
+
+/**
+ * Obtiene las plagas más comunes para la leyenda
+ * @param {Object} ubicacionesConPlagas - Datos de plagas por ubicación
+ * @returns {Array} Array con las top 5 plagas
+ */
+function obtenerTopPlagas(ubicacionesConPlagas) {
+  const conteoPlagas = {};
+  
+  // Contar frecuencia total de cada plaga
+  Object.values(ubicacionesConPlagas).forEach(plagasUbicacion => {
+    Object.entries(plagasUbicacion).forEach(([plaga, cantidad]) => {
+      conteoPlagas[plaga] = (conteoPlagas[plaga] || 0) + cantidad;
+    });
+  });
+  
+  // Ordenar por frecuencia (descendente) y tomar top 5
+  const topPlagas = Object.entries(conteoPlagas)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([plaga]) => plaga);
+  
+  console.log('🏆 Top 5 plagas más comunes:', topPlagas);
+  
+  return topPlagas;
+}
+
+/**
+ * Crea la gráfica de plagas por ubicación
+ */
+function crearGraficaPlagasPorUbicacion(registros) {
+  if (!registros || registros.length === 0) {
+    console.log('⚠️ No hay registros para gráfica de plagas por ubicación');
+    mostrarMensajeSinDatos('chartPlagasPorUbicacion');
+    return;
+  }
+  
+  // 1. Calcular estadísticas cruzadas
+  const estadisticas = calcularEstadisticasCruzadas(registros);
+  
+  // 2. Verificar si hay datos
+  if (estadisticas.topUbicaciones.length === 0) {
+    console.log('ℹ️ No hay datos suficientes para gráfica de plagas por ubicación');
+    mostrarMensajeSinDatos('chartPlagasPorUbicacion');
+    return;
+  }
+  
+  // 3. Preparar datos para el gráfico
+  const ubicaciones = estadisticas.topUbicaciones.map(item => item.ubicacion);
+  const totales = estadisticas.topUbicaciones.map(item => item.cantidad);
+  
+  // 4. Obtener top plagas
+  const topPlagas = obtenerTopPlagas(estadisticas.ubicacionesConPlagas);
+  
+  let datasets = [];
+  
+  if (topPlagas.length > 0) {
+    // Gráfico de barras apiladas con top 5 plagas
+    topPlagas.forEach((plaga, index) => {
+      const datosPlaga = ubicaciones.map(ubicacion => {
+        return estadisticas.ubicacionesConPlagas[ubicacion]?.[plaga] || 0;
+      });
+      
+      datasets.push({
+        label: plaga,
+        data: datosPlaga,
+        backgroundColor: generarColorPorIndice(index),
+        borderWidth: 1,
+        borderColor: '#fff',
+        borderRadius: 6
+      });
+    });
+  } else {
+    // Gráfico simple si no hay plagas detalladas
+    datasets = [{
+      label: 'Total de Plagas',
+      data: totales,
+      backgroundColor: generarColoresCalidos(ubicaciones.length),
+      borderWidth: 2,
+      borderColor: '#fff',
+      borderRadius: 8
+    }];
+  }
+  
+  // 5. Crear el gráfico
+  crearGraficoCruzado('chartPlagasPorUbicacion', 'bar', {
+    labels: ubicaciones,
+    datasets: datasets
+  });
+}
+
+/**
+ * Muestra mensaje cuando no hay datos
+ */
+function mostrarMensajeSinDatos(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  
+  const parent = canvas.parentElement;
+  
+  // Limpiar canvas anterior
+  const canvasExistente = document.getElementById(canvasId);
+  if (canvasExistente) {
+    canvasExistente.remove();
+  }
+  
+  // Limpiar mensajes anteriores
+  const mensajesAnteriores = parent.querySelectorAll('.no-data-message, .error-message');
+  mensajesAnteriores.forEach(msg => msg.remove());
+  
+  // Destruir gráfico anterior si existe
+  if (charts[canvasId]) {
+    charts[canvasId].destroy();
+  }
+  
+  // Mostrar mensaje
+  const mensajeDiv = document.createElement('div');
+  mensajeDiv.className = 'no-data-message';
+  mensajeDiv.innerHTML = '<p>No hay datos de plagas por ubicación</p>';
+  mensajeDiv.style.cssText = `
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9f9f9;
+    border-radius: 8px;
+    color: #666;
+    font-style: italic;
+  `;
+  parent.appendChild(mensajeDiv);
+}
+
+function crearGraficaPlagasPorUbicacion(registros) {
+  if (!registros || registros.length === 0) {
+    console.log('⚠️ No hay registros para gráfica de plagas por ubicación');
+    mostrarMensajeSinDatos('chartPlagasPorUbicacion');
+    return;
+  }
+  
+  // 1. Calcular estadísticas cruzadas
+  const estadisticas = calcularEstadisticasCruzadas(registros);
+  
+  // 2. Verificar si hay datos
+  if (estadisticas.topUbicaciones.length === 0) {
+    console.log('ℹ️ No hay datos suficientes para gráfica de plagas por ubicación');
+    mostrarMensajeSinDatos('chartPlagasPorUbicacion');
+    return;
+  }
+  
+  // 3. Preparar datos para el gráfico
+  const ubicaciones = estadisticas.topUbicaciones.map(item => item.ubicacion);
+  const totales = estadisticas.topUbicaciones.map(item => item.cantidad); // 🎯 ESTOS SON LOS TOTALES
+  
+  console.log('📊 Ubicaciones:', ubicaciones);
+  console.log('📊 Totales:', totales);
+  
+  // 4. Obtener top plagas CON SUS CANTIDADES
+  const topPlagas = obtenerTopPlagasConCantidad(estadisticas.ubicacionesConPlagas);
+  
+  let datasets = [];
+  
+  if (topPlagas.length > 0) {
+    // Gráfico de barras apiladas con top 5 plagas
+    topPlagas.forEach((plagaInfo, index) => {
+      const datosPlaga = ubicaciones.map(ubicacion => {
+        return estadisticas.ubicacionesConPlagas[ubicacion]?.[plagaInfo.nombre] || 0;
+      });
+      
+      // 🎯 AGREGAR LA CANTIDAD TOTAL A LA LEYENDA
+      const cantidadTotal = datosPlaga.reduce((a, b) => a + b, 0);
+      datasets.push({
+        label: `${plagaInfo.nombre} (${cantidadTotal})`, // 🎯 AQUÍ LA CANTIDAD
+        data: datosPlaga,
+        backgroundColor: generarColorPorIndice(index),
+        borderWidth: 1,
+        borderColor: '#fff',
+        borderRadius: 6
+      });
+    });
+  } else {
+    // Gráfico simple si no hay plagas detalladas
+    datasets = [{
+      label: 'Total de Plagas',
+      data: totales,
+      backgroundColor: generarColoresCalidos(ubicaciones.length),
+      borderWidth: 2,
+      borderColor: '#fff',
+      borderRadius: 8
+    }];
+  }
+  
+  // 5. 🎯 CREAR EL GRÁFICO PASANDO LOS TOTALES
+  crearGraficoCruzado('chartPlagasPorUbicacion', 'bar', {
+    labels: ubicaciones,
+    datasets: datasets
+  }, totales); // 🎯 AQUÍ PASAS LOS TOTALES
+}
+
+function obtenerTopPlagasConCantidad(ubicacionesConPlagas) {
+  const conteoPlagas = {};
+  
+  // Contar frecuencia total de cada plaga
+  Object.values(ubicacionesConPlagas).forEach(plagasUbicacion => {
+    Object.entries(plagasUbicacion).forEach(([plaga, cantidad]) => {
+      conteoPlagas[plaga] = (conteoPlagas[plaga] || 0) + cantidad;
+    });
+  });
+  
+  // Ordenar por frecuencia (descendente) y tomar top 5
+  const topPlagas = Object.entries(conteoPlagas)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([nombre, cantidadTotal]) => ({
+      nombre: nombre,
+      cantidadTotal: cantidadTotal
+    }));
+  
+  console.log('🏆 Top 5 plagas con cantidades totales:', topPlagas);
+  
+  return topPlagas;
+}
+
+</script>

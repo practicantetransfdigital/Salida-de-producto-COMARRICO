@@ -47,17 +47,10 @@ function guardarRegistro(event) {
   btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
   btnGuardar.disabled = true;
   
-  // Validar que el campo de fecha existe
-  const fechaRetornoInput = document.getElementById('fechaRetorno');
-  if (!fechaRetornoInput) {
-    mostrarNotificacion('Error: Campo de fecha no encontrado', 'error');
-    btnGuardar.innerHTML = textoOriginal;
-    btnGuardar.disabled = false;
-    return;
-  }
-  
   // Validar fecha de retorno
+  const fechaRetornoInput = document.getElementById('fechaRetorno');
   const fechaRetornoValor = fechaRetornoInput.value;
+  
   if (!fechaRetornoValor) {
     mostrarNotificacion('La fecha de retorno es requerida', 'error');
     btnGuardar.innerHTML = textoOriginal;
@@ -65,30 +58,30 @@ function guardarRegistro(event) {
     return;
   }
   
-  // CORRECCIÓN: Manejar fecha correctamente sin problemas de zona horaria
-  const fechaRetorno = new Date(fechaRetornoValor + 'T00:00:00'); // Agregar tiempo para evitar ajuste de zona horaria
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  // Obtener valores del formulario
+  const codigo = document.getElementById('codigo').value.trim();
+  const nombreProducto = document.getElementById('nombreproducto').value.trim();
+  const descripcion = document.getElementById('descripcion').value.trim();
+  const tipoSalida = document.getElementById('tipoSalida').value;
+  const tipoPlaga = document.getElementById('tipoPlaga').value;
+  const responsable = document.getElementById('responsable').value.trim();
+  const pasillo = document.getElementById('pasillo').value.trim();
+  const estado = document.getElementById('estado').value;
   
-  if (fechaRetorno < hoy) {
-    mostrarNotificacion('La fecha de retorno no puede ser anterior a hoy', 'error');
-    btnGuardar.innerHTML = textoOriginal;
-    btnGuardar.disabled = false;
-    return;
-  }
-  
-  // CORRECCIÓN: Enviar la fecha en formato YYYY-MM-DD sin problemas de zona horaria
+  // 🎯 NORMALIZAR DATOS ANTES DE ENVIAR
   const datos = {
-    'Código': document.getElementById('codigo').value.trim(),
-    'NombreProducto': document.getElementById('nombreproducto').value.trim(),
-    'Descripción': document.getElementById('descripcion').value.trim(),
-    'Tipo de Salida': document.getElementById('tipoSalida').value,
-    'Tipo de Plaga/Hallazgo': document.getElementById('tipoPlaga').value,
-    'Responsable': document.getElementById('responsable').value.trim(),
-    'Pasillo/Ubicación': document.getElementById('pasillo').value.trim(),
-    'Fecha Estimada de Retorno': fechaRetornoValor, // Enviar el valor original del input
-    'Estado': document.getElementById('estado').value
+    'Código': codigo,
+    'NombreProducto': nombreProducto,
+    'Descripción': descripcion,
+    'Tipo de Salida': tipoSalida,
+    'Tipo de Plaga/Hallazgo': tipoPlaga,
+    'Responsable': responsable,
+    'Pasillo/Ubicación': normalizarUbicacion(pasillo), // 🎯 AQUÍ SE NORMALIZA
+    'Fecha Estimada de Retorno': fechaRetornoValor,
+    'Estado': estado
   };
+  
+  console.log('📝 Datos normalizados para guardar:', datos);
   
   // Validar campos requeridos
   const camposRequeridos = ['Código', 'NombreProducto', 'Descripción', 'Tipo de Salida', 'Responsable', 'Pasillo/Ubicación', 'Fecha Estimada de Retorno', 'Estado'];
@@ -109,8 +102,6 @@ function guardarRegistro(event) {
     btnGuardar.disabled = false;
     mostrarNotificacion('El registro está tardando demasiado. Intente nuevamente.', 'warning');
   }, 10000);
-  
-  timeoutIds.push(timeoutId);
   
   google.script.run
     .withSuccessHandler((resultado) => {
@@ -211,7 +202,7 @@ function cargarOpcionesFormulario() {
       // Usar opciones por defecto incluyendo "Vencido"
       llenarSelect('tipoSalida', ['Control de Calidad', 'Gasificación', 'Destrucción', 'Para Revisión', 'Reproceso', 'Devolución a Proveedor', 'Otro']);
       llenarSelect('tipoPlaga', ['N/A', 'Insectos', 'Roedores', 'Hongos', 'Contaminación', 'Otro']);
-      llenarSelect('estado', ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido', 'Vencido']);
+      llenarSelect('estado', ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido']);
     })
     .obtenerOpciones();
 }

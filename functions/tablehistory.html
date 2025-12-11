@@ -23,6 +23,7 @@ function cargarTabla(registros) {
       <td>${registro['NombreProducto'] || '-'}</td>
       <td>${registro['Tipo de Salida'] || '-'}</td>
       <td>${formatearFecha(registro['Fecha y Hora de Retiro'])}</td>
+      <td>${formatearFechaSimple(registro['Tiempo Estimado de Retorno'])}</td>
       <td>${registro.Responsable || '-'}</td>
       <td><span class="badge ${estadoBadge}">${registro.Estado || '-'}</span></td>
       <td>

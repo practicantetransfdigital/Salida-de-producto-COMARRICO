@@ -304,4 +304,159 @@ function llenarSelect(selectId, opciones) {
   });
 }
 
+// Función para recargar todo el sistema después de una edición
+function recargarSistemaCompleto() {
+  console.log('🔄 Recargando sistema completo...');
+  
+  // Recargar el dashboard si estamos en esa sección
+  if (document.getElementById('seccionDashboard').style.display === 'block' || 
+      document.getElementById('seccionDashboard').style.display === '') {
+    console.log('📊 Recargando dashboard...');
+    cargarDashboard();
+  }
+  
+  // Recargar el historial de vencidos si estamos en esa sección
+  if (document.getElementById('seccionVencidos').style.display === 'block') {
+    console.log('📋 Recargando historial vencidos...');
+    cargarHistorialVencidos();
+  }
+  
+  // Si estamos viendo detalles de un registro, cerrarlo
+  const modalDetalles = document.getElementById('modalDetalles');
+  if (modalDetalles && modalDetalles.classList.contains('active')) {
+    cerrarModalDetalles();
+  }
+}
+
+// Función para refrescar el apartado de vencidos
+function refrescarVencidos() {
+  console.log('🔄 Refrescando datos de vencidos...');
+  mostrarLoading(true);
+  
+  // Agregar animación al botón
+  const btn = event.currentTarget;
+  const icon = btn.querySelector('i');
+  icon.classList.add('fa-spin');
+  
+  // Recargar primero el dashboard para obtener datos frescos
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      // Detener animación
+      icon.classList.remove('fa-spin');
+      
+      if (resultado && typeof resultado === 'string') {
+        try {
+          resultado = JSON.parse(resultado);
+        } catch (e) {
+          console.error('Error parseando respuesta:', e);
+        }
+      }
+      
+      if (resultado && resultado.success === true) {
+        // Actualizar datos en memoria
+        datosCompletos = resultado;
+        
+        // Recargar la vista de vencidos
+        cargarHistorialVencidos();
+        
+        mostrarNotificacion('✅ Datos de vencidos actualizados', 'success');
+        mostrarLoading(false);
+      } else {
+        mostrarNotificacion('❌ Error al actualizar datos', 'error');
+        mostrarLoading(false);
+      }
+    })
+    .withFailureHandler(function(error) {
+      // Detener animación
+      icon.classList.remove('fa-spin');
+      mostrarNotificacion('❌ Error del servidor: ' + error.message, 'error');
+    })
+    .obtenerDatosDashboard();
+}
+
+function forzarRefrescoCompleto() {
+  console.log('🔄 FORZANDO REFRESCO COMPLETO DEL SISTEMA...');
+  
+  // 1. Limpiar datos actuales
+  datosCompletos = null;
+  registrosVencidos = [];
+  registrosVencidosFiltrados = [];
+  
+  // 2. Recargar dashboard completo
+  mostrarLoading(true);
+  
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarLoading(false);
+      
+      if (resultado && typeof resultado === 'string') {
+        try {
+          resultado = JSON.parse(resultado);
+        } catch (e) {
+          console.error('Error parseando respuesta:', e);
+        }
+      }
+      
+      if (resultado && resultado.success === true) {
+        // Actualizar datos en memoria
+        datosCompletos = resultado;
+        
+        // 3. Actualizar vista actual
+        if (document.getElementById('seccionDashboard').style.display === 'block' || 
+            document.getElementById('seccionDashboard').style.display === '') {
+          // Actualizar dashboard
+          actualizarEstadisticas(resultado.estadisticas || {});
+          crearGraficos(resultado.estadisticas || {});
+          cargarTabla((resultado.estadisticas && resultado.estadisticas.ultimosRegistros) || []);
+          console.log('✅ Dashboard actualizado');
+        }
+        
+        if (document.getElementById('seccionVencidos').style.display === 'block') {
+          // Actualizar historial vencidos
+          cargarHistorialVencidos();
+          console.log('✅ Historial vencidos actualizado');
+        }
+        
+        // 4. Actualizar contador de vencidos en navbar
+        actualizarContadorVencidosEnDashboard();
+        
+        mostrarNotificacion('✅ Sistema actualizado completamente', 'success');
+        
+      } else {
+        mostrarNotificacion('❌ Error al recargar datos', 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarLoading(false);
+      mostrarNotificacion('❌ Error al recargar datos del servidor', 'error');
+    })
+    .obtenerDatosDashboard();
+}
+
+function generarColorPorIndice(index) {
+  const colores = [
+    '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2',
+    '#EF476F', '#FFD166', '#06D6A0', '#118AB2', '#073B4C'
+  ];
+  return colores[index % colores.length];
+}
+
+function generarColoresCalidos(cantidad) {
+  const coloresBase = [
+    '#FDB913', '#F59E0B', '#FBBF24', '#FCD34D', '#FDE047',
+    '#FEF08A', '#FFE5B4', '#FFDAB9', '#FFA500', '#FF8C00'
+  ];
+  
+  if (cantidad <= coloresBase.length) {
+    return coloresBase.slice(0, cantidad);
+  }
+  
+  const colores = [];
+  for (let i = 0; i < cantidad; i++) {
+    const hue = 40 + (i * 20);
+    colores.push(`hsl(${hue}, 90%, 60%)`);
+  }
+  return colores;
+}
+
 </script>

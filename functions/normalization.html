@@ -1,0 +1,52 @@
+<script>
+
+function normalizarUbicacion(texto) {
+  if (!texto || typeof texto !== 'string') return 'SIN ESPECIFICAR';
+  
+  // 1. Trim y eliminar espacios múltiples
+  let normalizado = texto.trim().replace(/\s+/g, ' ');
+  
+  // 2. Convertir a mayúsculas
+  normalizado = normalizado.toUpperCase();
+  
+  // 3. Quitar tildes
+  normalizado = normalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  // 4. Eliminar caracteres especiales (mantener letras, números, espacios, guiones)
+  normalizado = normalizado.replace(/[^A-Z0-9\s\-]/g, '');
+  
+  // 5. Eliminar espacios al inicio y final
+  normalizado = normalizado.trim();
+  
+  return normalizado || 'SIN ESPECIFICAR';
+}
+
+/**
+ * Normaliza estadísticas completas
+ * @param {Object} estadisticas - Estadísticas a normalizar
+ * @returns {Object} Estadísticas normalizadas
+ */
+function normalizarEstadisticas(estadisticas) {
+  if (!estadisticas) return estadisticas;
+  
+  // Normalizar ubicaciones en porPasillo
+  if (estadisticas.porPasillo) {
+    const normalizado = {};
+    
+    Object.entries(estadisticas.porPasillo).forEach(([pasillo, cantidad]) => {
+      const pasilloNormalizado = normalizarUbicacion(pasillo);
+      
+      if (normalizado[pasilloNormalizado]) {
+        normalizado[pasilloNormalizado] += cantidad;
+      } else {
+        normalizado[pasilloNormalizado] = cantidad;
+      }
+    });
+    
+    estadisticas.porPasillo = normalizado;
+  }
+  
+  return estadisticas;
+}
+
+</script>

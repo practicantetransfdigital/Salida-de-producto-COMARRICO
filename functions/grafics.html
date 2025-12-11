@@ -6,7 +6,12 @@ function crearGraficos(stats) {
     return;
   }
   
-  // Destruir gráficos anteriores
+  console.log('🎨 Creando gráficos con estadísticas:', stats);
+  
+  // 1. Normalizar estadísticas (ubicaciones a mayúsculas)
+  const statsNormalizados = normalizarEstadisticas(stats);
+  
+  // 2. Destruir gráficos anteriores
   Object.values(charts).forEach(chart => {
     if (chart && typeof chart.destroy === 'function') {
       chart.destroy();
@@ -22,7 +27,7 @@ function crearGraficos(stats) {
         position: 'bottom',
         labels: {
           font: {
-            family: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            family: '-apple-system, BlinkMacSystemFont, sans-serif',
             size: 12
           },
           padding: 15
@@ -36,102 +41,25 @@ function crearGraficos(stats) {
     '#FDE047', '#FEF08A', '#FFE5B4', '#FFDAB9'
   ];
   
-  // Gráfico de Tipo de Salida
-  crearGraficoIndividual(
-    'chartTipoSalida', 
-    'doughnut', 
-    stats.porTipoSalida, 
-    coloresCalidos,
-    commonOptions
-  );
+  // 3. Crear gráficos individuales
+  crearGraficoIndividual('chartTipoSalida', 'doughnut', statsNormalizados.porTipoSalida, coloresCalidos, commonOptions);
+ crearGraficaPlagasConCantidadSimple(statsNormalizados);
   
-  // Gráfico de Tipo de Plaga
-crearGraficoIndividual(
-  'chartTipoPlaga',
-  'bar',
-  stats.porTipoPlaga,
-  ['#FDB913'],
-  {
+  crearGraficoIndividual('chartPasillo', 'bar', statsNormalizados.porPasillo, ['#F59E0B'], {
     ...commonOptions,
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: { 
-          stepSize: 1,
-          font: {
-            size: 11
-          }
-        }
-      },
-      x: {
-        ticks: {
-          font: {
-            size: 10, // Un poco más pequeño para que quepan más
-            family: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-          },
-          maxRotation: 45, // Inclinar 45 grados para que quepan más
-          minRotation: 45, // Forzar inclinación
-          autoSkip: false, // ← IMPORTANTE: Mostrar todas las etiquetas
-          includeBounds: true,
-          callback: function(value, index) {
-            // value es el índice, necesitamos los labels originales
-            const labels = this.chart.data.labels;
-            const originalLabel = labels[index];
-            
-            if (!originalLabel) return '';
-            
-            // Limitar a 10 caracteres máximo (más corto para que quepan más)
-            const maxChars = 10;
-            if (originalLabel.length > maxChars) {
-              return originalLabel.substring(0, maxChars - 3) + '...';
-            }
-            return originalLabel;
-          }
-        },
-        // Ajustar el grid para que quepan más etiquetas
-        grid: {
-          offset: true
-        }
-      }
-    },
-    // Ajustar el layout para mejor espacio
-    layout: {
-      padding: {
-        left: 10,
-        right: 10,
-        top: 10,
-        bottom: 20
-      }
-    }
+    indexAxis: 'y',
+    scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+  });
+  
+  crearGraficoIndividual('chartEstado', 'pie', stats.porEstado, coloresCalidos, commonOptions);
+  
+  // 4. Crear gráfica de plagas por ubicación (estadística cruzada)
+  if (datosCompletos && datosCompletos.registros) {
+    console.log('📊 Creando gráfica de plagas por ubicación con', datosCompletos.registros.length, 'registros');
+    crearGraficaPlagasPorUbicacion(datosCompletos.registros);
+  } else {
+    console.warn('⚠️ No hay datos completos para gráfica de plagas por ubicación');
   }
-);
-  
-  // Gráfico de Pasillo
-  crearGraficoIndividual(
-    'chartPasillo',
-    'bar',
-    stats.porPasillo,
-    ['#F59E0B'],
-    {
-      ...commonOptions,
-      indexAxis: 'y',
-      scales: {
-        x: {
-          beginAtZero: true,
-          ticks: { stepSize: 1 }
-        }
-      }
-    }
-  );
-  
-  // Gráfico de Estado
-  crearGraficoIndividual(
-    'chartEstado',
-    'pie',
-    stats.porEstado,
-    coloresCalidos,
-    commonOptions
-  );
 }
 
 function crearGraficoIndividual(canvasId, tipo, datos, colores, opciones) {
@@ -258,6 +186,349 @@ function actualizarEstadisticas(stats) {
   document.getElementById('enRevision').textContent = (stats.porEstado && stats.porEstado['En Revisión']) || 0;
   document.getElementById('devueltos').textContent = (stats.porEstado && stats.porEstado['Devuelto']) || 0;
   document.getElementById('pendientes').textContent = (stats.porEstado && stats.porEstado['Pendiente por Devolución']) || 0;
+}
+
+function crearGraficoCruzado(canvasId, tipo, data, totales = null) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) {
+    console.error(`❌ No se encontró el canvas: ${canvasId}`);
+    return;
+  }
+  
+  const parent = canvas.parentElement;
+  
+  // Limpiar canvas anterior
+  const canvasExistente = document.getElementById(canvasId);
+  if (canvasExistente) {
+    canvasExistente.remove();
+  }
+  
+  // Limpiar mensajes
+  const mensajesAnteriores = parent.querySelectorAll('.no-data-message, .error-message');
+  mensajesAnteriores.forEach(msg => msg.remove());
+  
+  // Destruir gráfico anterior
+  if (charts[canvasId]) {
+    charts[canvasId].destroy();
+  }
+  
+  // Crear nuevo canvas
+  const nuevoCanvas = document.createElement('canvas');
+  nuevoCanvas.id = canvasId;
+  nuevoCanvas.style.cssText = `
+    width: 100%;
+    height: 300px;
+    min-height: 300px;
+    max-height: 300px;
+  `;
+  parent.appendChild(nuevoCanvas);
+  
+  const ctx = nuevoCanvas.getContext('2d');
+  
+  try {
+    // 🎯 PREPARAR ETIQUETAS CON TOTALES SI ESTÁN DISPONIBLES
+    let labelsFinales = data.labels;
+    if (totales && totales.length === data.labels.length) {
+      labelsFinales = data.labels.map((label, index) => {
+        const total = totales[index];
+        return `${label} (${total})`;
+      });
+    }
+    
+    charts[canvasId] = new Chart(ctx, {
+      type: tipo,
+      data: {
+        labels: labelsFinales,
+        datasets: data.datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: {
+                family: '-apple-system, BlinkMacSystemFont, sans-serif',
+                size: 11
+              },
+              padding: 15,
+              boxWidth: 12,
+              boxHeight: 12
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                label += context.parsed.y;
+                return label;
+              },
+              // 🎯 AGREGAR TOTAL AL FOOTER DEL TOOLTIP
+              footer: function(tooltipItems) {
+                if (totales && tooltipItems.length > 0) {
+                  const dataIndex = tooltipItems[0].dataIndex;
+                  const totalUbicacion = totales[dataIndex];
+                  const ubicacionOriginal = data.labels[dataIndex];
+                  return `Total en ${ubicacionOriginal}: ${totalUbicacion}`;
+                }
+                return '';
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              font: { size: 11 }
+            },
+            title: {
+              display: true,
+              text: 'Cantidad de Plagas',
+              font: { size: 12, weight: 'bold' }
+            }
+          },
+          x: {
+            ticks: {
+              font: { size: 10 },
+              maxRotation: 45,
+              minRotation: 45,
+              autoSkip: false,
+              callback: function(value, index) {
+                const label = this.chart.data.labels[index];
+                if (!label) return '';
+                
+                // Truncar si es muy largo pero mantener el total
+                const maxChars = 20;
+                if (label.length > maxChars) {
+                  // Intentar extraer nombre y cantidad si tiene formato "Nombre (X)"
+                  const match = label.match(/^([^(]+)\((\d+)\)$/);
+                  if (match) {
+                    const nombre = match[1].trim();
+                    const cantidad = match[2];
+                    const nombreCorto = nombre.length > (maxChars - 6) 
+                      ? nombre.substring(0, maxChars - 8) + '...'
+                      : nombre;
+                    return `${nombreCorto} (${cantidad})`;
+                  }
+                  // Si no tiene formato, truncar normalmente
+                  return label.substring(0, maxChars - 3) + '...';
+                }
+                return label;
+              }
+            },
+            title: {
+              display: true,
+              text: 'Ubicaciones (Total)',
+              font: { size: 12, weight: 'bold' }
+            }
+          }
+        },
+        layout: {
+          padding: {
+            left: 10,
+            right: 10,
+            top: 10,
+            bottom: 30
+          }
+        }
+      }
+    });
+    
+    console.log(`✅ Gráfico ${canvasId} creado con totales:`, totales);
+    
+  } catch (error) {
+    console.error(`❌ Error creando gráfico ${canvasId}:`, error);
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.innerHTML = `
+      <p>Error al crear gráfico</p>
+      <small>${error.message}</small>
+    `;
+    errorDiv.style.cssText = `
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: #fff0f0;
+      border-radius: 8px;
+      border: 1px solid #ffcccc;
+      padding: 20px;
+    `;
+    parent.appendChild(errorDiv);
+  }
+}
+
+function crearGraficaPlagasConCantidadSimple(stats) {
+  if (!stats || !stats.porTipoPlaga) {
+    console.warn('⚠️ No hay estadísticas de plagas');
+    return;
+  }
+  
+  // Ordenar plagas por cantidad (descendente)
+  const plagasOrdenadas = Object.entries(stats.porTipoPlaga)
+    .filter(([plaga, cantidad]) => cantidad > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10); // Top 10
+  
+  if (plagasOrdenadas.length === 0) {
+    console.log('ℹ️ No hay datos de plagas');
+    return;
+  }
+  
+  // Preparar datos con cantidades en etiquetas
+  const labels = plagasOrdenadas.map(([plaga, cantidad]) => `${plaga} (${cantidad})`);
+  const data = plagasOrdenadas.map(([plaga, cantidad]) => cantidad);
+  
+  // Crear o actualizar gráfico
+  const canvas = document.getElementById('chartTipoPlaga');
+  if (!canvas) return;
+  
+  const parent = canvas.parentElement;
+  
+  // Limpiar canvas anterior
+  const canvasExistente = document.getElementById('chartTipoPlaga');
+  if (canvasExistente) {
+    canvasExistente.remove();
+  }
+  
+  // Limpiar mensajes
+  const mensajesAnteriores = parent.querySelectorAll('.no-data-message, .error-message');
+  mensajesAnteriores.forEach(msg => msg.remove());
+  
+  // Destruir gráfico anterior
+  if (charts['chartTipoPlaga']) {
+    charts['chartTipoPlaga'].destroy();
+  }
+  
+  // Crear nuevo canvas
+  const nuevoCanvas = document.createElement('canvas');
+  nuevoCanvas.id = 'chartTipoPlaga';
+  nuevoCanvas.style.cssText = `
+    width: 100%;
+    height: 300px;
+    min-height: 300px;
+    max-height: 300px;
+  `;
+  parent.appendChild(nuevoCanvas);
+  
+  const ctx = nuevoCanvas.getContext('2d');
+  
+  try {
+    charts['chartTipoPlaga'] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Cantidad',
+          data: data,
+          backgroundColor: '#FDB913',
+          borderWidth: 2,
+          borderColor: '#fff',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                // Mostrar solo el nombre en el tooltip
+                const fullLabel = context.label || '';
+                const match = fullLabel.match(/^([^(]+)/);
+                const plagaNombre = match ? match[1].trim() : fullLabel;
+                return `${plagaNombre}: ${context.raw}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              font: { size: 11 }
+            },
+            title: {
+              display: true,
+              text: 'Cantidad',
+              font: { size: 12, weight: 'bold' }
+            }
+          },
+          x: {
+            ticks: {
+              font: { size: 10 },
+              maxRotation: 45,
+              minRotation: 45,
+              autoSkip: false,
+              callback: function(value, index) {
+                const label = this.chart.data.labels[index];
+                if (!label) return '';
+                
+                // Truncar si es muy largo
+                const maxChars = 15;
+                if (label.length > maxChars) {
+                  const match = label.match(/^([^(]+)\((\d+)\)$/);
+                  if (match) {
+                    const nombre = match[1].trim();
+                    const cantidad = match[2];
+                    const nombreCorto = nombre.substring(0, maxChars - 6) + '...';
+                    return `${nombreCorto} (${cantidad})`;
+                  }
+                }
+                return label;
+              }
+            },
+            title: {
+              display: true,
+              text: 'Tipo de Plaga (Cantidad)',
+              font: { size: 12, weight: 'bold' }
+            }
+          }
+        },
+        layout: {
+          padding: {
+            left: 10,
+            right: 10,
+            top: 10,
+            bottom: 30
+          }
+        }
+      }
+    });
+    
+    console.log('✅ Gráfica de plagas creada con cantidades:', plagasOrdenadas);
+    
+  } catch (error) {
+    console.error('❌ Error creando gráfica de plagas:', error);
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.innerHTML = '<p>Error al crear gráfico de plagas</p>';
+    errorDiv.style.cssText = `
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff0f0;
+      border-radius: 8px;
+      border: 1px solid #ffcccc;
+    `;
+    parent.appendChild(errorDiv);
+  }
 }
 
 </script>

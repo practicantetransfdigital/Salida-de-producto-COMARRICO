@@ -1,0 +1,254 @@
+<script>
+
+let registroEditando = null;
+
+// Nueva función para abrir modal de edición (NO cierra el modal de detalles)
+function abrirModalEdicion(id) {
+  if (!datosCompletos || !datosCompletos.registros) return;
+  
+  const registro = datosCompletos.registros.find(r => r.ID === id);
+  if (!registro) return;
+  
+  // NO cerrar todos los modales, solo el de edición si está abierto
+  const modalEdicion = document.getElementById('modalEdicionCompleta');
+  if (modalEdicion) {
+    modalEdicion.style.display = 'none';
+  }
+  
+  registroEditando = registro;
+  
+  // Llamar a la función corregida para cargar datos
+  cargarDatosEnModalEdicion(registro);
+  
+  // Mostrar modal
+  if (modalEdicion) {
+    modalEdicion.style.display = 'flex';
+    modalEdicion.classList.add('active');
+  }
+}
+
+function cerrarModalEdicion() {
+  const modal = document.getElementById('modalEdicionCompleta');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+  registroEditando = null;
+}
+
+function guardarEdicionCompleta(event) {
+  event.preventDefault();
+  
+  if (!registroEditando) {
+    mostrarNotificacion('No hay registro para editar', 'error');
+    return;
+  }
+  
+  // Obtener valores
+  const codigo = document.getElementById('editCodigo').value.trim();
+  const nombreProducto = document.getElementById('editNombreProducto').value.trim();
+  const descripcion = document.getElementById('editDescripcion').value.trim();
+  const tipoSalida = document.getElementById('editTipoSalida').value.trim();
+  const tipoPlaga = document.getElementById('editTipoPlaga').value.trim();
+  const responsable = document.getElementById('editResponsable').value.trim();
+  const pasillo = document.getElementById('editPasillo').value.trim();
+  const fechaRetornoInput = document.getElementById('editFechaRetorno').value;
+  const fechaRetiroInput = document.getElementById('editFechaRetiro').value;
+  
+  // Validar
+  if (!codigo || !nombreProducto || !descripcion || !tipoSalida || !responsable || 
+      !pasillo || !fechaRetornoInput || !fechaRetiroInput) {
+    mostrarNotificacion('Complete todos los campos requeridos', 'warning');
+    return;
+  }
+  
+  // 🎯 NORMALIZAR DATOS DE EDICIÓN
+  const pasilloNormalizado = normalizarUbicacion(pasillo);
+  
+  // Procesar fechas
+  let fechaRetiroFormateada = '';
+  let fechaRetornoFormateada = '';
+  
+  try {
+    // Formatear fecha de retiro
+    const fechaRetiro = new Date(fechaRetiroInput);
+    if (!isNaN(fechaRetiro.getTime())) {
+      const dia = String(fechaRetiro.getDate()).padStart(2, '0');
+      const mes = String(fechaRetiro.getMonth() + 1).padStart(2, '0');
+      const año = fechaRetiro.getFullYear();
+      const horas = String(fechaRetiro.getHours()).padStart(2, '0');
+      const minutos = String(fechaRetiro.getMinutes()).padStart(2, '0');
+      fechaRetiroFormateada = `${dia}/${mes}/${año} ${horas}:${minutos}`;
+    }
+    
+    // Formatear fecha de retorno
+    const fechaRetorno = new Date(fechaRetornoInput + 'T00:00:00');
+    if (!isNaN(fechaRetorno.getTime())) {
+      const dia = String(fechaRetorno.getDate()).padStart(2, '0');
+      const mes = String(fechaRetorno.getMonth() + 1).padStart(2, '0');
+      const año = fechaRetorno.getFullYear();
+      fechaRetornoFormateada = `${dia}/${mes}/${año}`;
+    }
+  } catch (error) {
+    console.error('Error formateando fechas:', error);
+    mostrarNotificacion('Error en el formato de las fechas', 'error');
+    return;
+  }
+  
+  if (!fechaRetiroFormateada || !fechaRetornoFormateada) {
+    mostrarNotificacion('Error en el formato de las fechas', 'error');
+    return;
+  }
+  
+  // Preparar datos NORMALIZADOS para enviar
+  const datosActualizados = {
+    ID: registroEditando.ID,
+    'Código': codigo,
+    'NombreProducto': nombreProducto,
+    'Descripción': descripcion,
+    'Tipo de Salida': tipoSalida,
+    'Tipo de Plaga/Hallazgo': tipoPlaga,
+    'Responsable': responsable,
+    'Pasillo/Ubicación': pasilloNormalizado, // 🎯 AQUÍ SE NORMALIZA
+    'Tiempo Estimado de Retorno': fechaRetornoFormateada,
+    'Fecha y Hora de Retiro': fechaRetiroFormateada
+  };
+  
+  console.log('📝 Datos normalizados para editar:', datosActualizados);
+  
+  // Mostrar loading y enviar
+  mostrarLoading(true);
+  
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarLoading(false);
+      
+      if (resultado && resultado.success) {
+        cerrarModalEdicion();
+        mostrarNotificacion('✅ Registro actualizado correctamente', 'success');
+        forzarRefrescoCompleto();
+      } else {
+        mostrarNotificacion('❌ Error al actualizar: ' + (resultado?.message || 'Error desconocido'), 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarLoading(false);
+      mostrarNotificacion('❌ Error del servidor: ' + error.message, 'error');
+    })
+    .actualizarRegistroCompleto(datosActualizados);
+}
+
+// Alias para mantener compatibilidad
+function editarVencido(id) {
+  abrirModalEdicion(id);
+}
+
+function cargarDatosEnModalEdicion(registro) {
+  console.log('DEBUG: Registro completo:', registro);
+  
+  // Cargar campos básicos
+  document.getElementById('editCodigo').value = registro.Código || '';
+  document.getElementById('editNombreProducto').value = registro.NombreProducto || '';
+  document.getElementById('editDescripcion').value = registro.Descripción || '';
+  document.getElementById('editTipoSalida').value = registro['Tipo de Salida'] || '';
+  
+  // Campo de Tipo de Plaga
+  const tipoPlaga = registro['Tipo de Plaga/Hallazgo'] || registro['Tipo de Plaga'] || '';
+  document.getElementById('editTipoPlaga').value = tipoPlaga;
+  
+  document.getElementById('editResponsable').value = registro.Responsable || '';
+  
+  // Campo de Ubicación
+  const ubicacion = registro['Pasillo/Ubicación'] || registro['Pasillo'] || '';
+  document.getElementById('editPasillo').value = ubicacion;
+  
+  // CORRECCIÓN: Manejo de fecha de retiro (sin problemas de zona horaria)
+  if (registro['Fecha y Hora de Retiro']) {
+    try {
+      const fechaRetiroStr = registro['Fecha y Hora de Retiro'].toString();
+      console.log('DEBUG: Fecha retiro original:', fechaRetiroStr);
+      
+      let fechaRetiro;
+      
+      // Si es formato dd/mm/yyyy HH:mm
+      if (fechaRetiroStr.includes('/') && fechaRetiroStr.includes(':')) {
+        const [fechaPart, horaPart] = fechaRetiroStr.split(' ');
+        const [dia, mes, año] = fechaPart.split('/');
+        const [horas, minutos] = horaPart ? horaPart.split(':') : ['00', '00'];
+        
+        // Crear fecha en hora local (Colombia UTC-5)
+        fechaRetiro = new Date(
+          parseInt(año),
+          parseInt(mes) - 1, // Mes 0-indexed
+          parseInt(dia),
+          parseInt(horas),
+          parseInt(minutos)
+        );
+        
+        console.log('DEBUG: Fecha parseada (local):', fechaRetiro);
+      } else {
+        // Si ya es objeto Date o string ISO
+        fechaRetiro = new Date(fechaRetiroStr);
+      }
+      
+      if (!isNaN(fechaRetiro.getTime())) {
+        // Formatear para input datetime-local (YYYY-MM-DDTHH:mm)
+        // Usar métodos getFullYear(), getMonth(), etc. que devuelven hora LOCAL
+        const year = fechaRetiro.getFullYear();
+        const month = String(fechaRetiro.getMonth() + 1).padStart(2, '0');
+        const day = String(fechaRetiro.getDate()).padStart(2, '0');
+        const hours = String(fechaRetiro.getHours()).padStart(2, '0');
+        const minutes = String(fechaRetiro.getMinutes()).padStart(2, '0');
+        
+        const fechaFormateada = `${year}-${month}-${day}T${hours}:${minutes}`;
+        document.getElementById('editFechaRetiro').value = fechaFormateada;
+        console.log('DEBUG: Fecha retiro formateada:', fechaFormateada);
+      }
+    } catch (error) {
+      console.error('Error cargando fecha retiro:', error);
+    }
+  }
+  
+  // CORRECCIÓN: Manejo de fecha de retorno (solo fecha, sin hora)
+  if (registro['Tiempo Estimado de Retorno']) {
+    try {
+      const fechaRetornoStr = registro['Tiempo Estimado de Retorno'].toString();
+      console.log('DEBUG: Fecha retorno original:', fechaRetornoStr);
+      
+      let fechaRetorno;
+      
+      // Si es formato dd/mm/yyyy
+      if (fechaRetornoStr.includes('/')) {
+        const [dia, mes, año] = fechaRetornoStr.split('/');
+        
+        // Crear fecha a medianoche en hora local
+        fechaRetorno = new Date(
+          parseInt(año),
+          parseInt(mes) - 1,
+          parseInt(dia)
+        );
+        
+        console.log('DEBUG: Fecha retorno parseada:', fechaRetorno);
+      } else {
+        // Si es string ISO o Date
+        fechaRetorno = new Date(fechaRetornoStr);
+      }
+      
+      if (!isNaN(fechaRetorno.getTime())) {
+        // Formatear para input type="date" (YYYY-MM-DD)
+        // IMPORTANTE: Usar hora local
+        const year = fechaRetorno.getFullYear();
+        const month = String(fechaRetorno.getMonth() + 1).padStart(2, '0');
+        const day = String(fechaRetorno.getDate()).padStart(2, '0');
+        
+        const fechaFormateada = `${year}-${month}-${day}`;
+        document.getElementById('editFechaRetorno').value = fechaFormateada;
+        console.log('DEBUG: Fecha retorno formateada:', fechaFormateada);
+      }
+    } catch (error) {
+      console.error('Error cargando fecha retorno:', error);
+    }
+  }
+}
+
+</script>

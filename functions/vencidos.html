@@ -1,116 +1,404 @@
 <script>
 
-function cargarDashboard() {
-  if (cargandoDashboard) {
-    console.log('🔄 Dashboard ya se está cargando, ignorando llamada duplicada');
+// ============================================================
+// HISTORIAL DE VENCIDOS - FUNCIONES
+// ============================================================
+
+let registrosVencidos = [];
+let registrosVencidosFiltrados = [];
+let paginaActualVencidos = 1;
+const registrosPorPaginaVencidos = 15;
+
+function mostrarSeccion(seccion) {
+  const seccionDashboard = document.getElementById('seccionDashboard');
+  const seccionVencidos = document.getElementById('seccionVencidos');
+  const btnDashboard = document.getElementById('btnDashboard');
+  const btnVencidos = document.getElementById('btnVencidos');
+  
+  if (!seccionDashboard || !seccionVencidos) {
     return;
   }
   
-  console.log('🔄 Iniciando carga de dashboard...');
-  cargandoDashboard = true;
-  mostrarLoading(true);
+  // Ocultar todas las secciones
+  seccionDashboard.style.display = 'none';
+  seccionVencidos.style.display = 'none';
   
-  const timeoutId = setTimeout(() => {
-    mostrarLoading(false);
-    cargandoDashboard = false;
-    mostrarNotificacion('La carga está tardando demasiado. Verifique su conexión.', 'warning');
-  }, 15000);
+  // Remover clase active de botones
+  if (btnDashboard) btnDashboard.classList.remove('active');
+  if (btnVencidos) btnVencidos.classList.remove('active');
   
-  timeoutIds.push(timeoutId);
-  
-  google.script.run
-    .withSuccessHandler((resultado) => {
-      clearTimeout(timeoutId);
-      cargandoDashboard = false;
-      respuestaDashboard(resultado);
-    })
-    .withFailureHandler((error) => {
-      clearTimeout(timeoutId);
-      cargandoDashboard = false;
-      errorDashboard(error);
-    })
-    .obtenerDatosDashboard();
-  
-  // Cargar opciones para el formulario en paralelo
-  cargarOpcionesFormulario();
+  if (seccion === 'dashboard') {
+    seccionDashboard.style.display = 'block';
+    if (btnDashboard) btnDashboard.classList.add('active');
+  } else if (seccion === 'vencidos') {
+    seccionVencidos.style.display = 'block';
+    if (btnVencidos) btnVencidos.classList.add('active');
+    cargarHistorialVencidos();
+  }
 }
 
-function respuestaDashboard(resultado) {
-  console.log('✅ Respuesta del dashboard:', resultado);
-  mostrarLoading(false);
+window.mostrarSeccion = mostrarSeccion;
+
+function inicializarNavbarVencidos() {
+  const btnDashboard = document.getElementById('btnDashboard');
+  const btnVencidos = document.getElementById('btnVencidos');
   
-  if (resultado === null || resultado === undefined) {
-    console.error('❌ ERROR: El servidor devolvió null/undefined');
-    // Solo mostrar error si estamos en la pantalla principal
-    if (document.getElementById('mainScreen').classList.contains('active')) {
-      mostrarNotificacion('Error: El servidor no respondió correctamente. Verifique la conexión y los permisos.', 'error');
-    }
+  if (btnDashboard) {
+    btnDashboard.addEventListener('click', function() {
+      mostrarSeccion('dashboard');
+    });
+  }
+  
+  if (btnVencidos) {
+    btnVencidos.addEventListener('click', function() {
+      mostrarSeccion('vencidos');
+    });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', inicializarNavbarVencidos);
+} else {
+  inicializarNavbarVencidos();
+}
+
+// Cargar historial de vencidos
+function cargarHistorialVencidos() {
+  if (!datosCompletos || !datosCompletos.registros) {
+    mostrarNotificacion('No hay datos disponibles. Cargando...', 'warning');
+    cargarDashboard();
     return;
   }
   
-  if (typeof resultado === 'string') {
-    try {
-      resultado = JSON.parse(resultado);
-    } catch (e) {
-      console.error('❌ Error parseando JSON:', e);
-      if (document.getElementById('mainScreen').classList.contains('active')) {
-        mostrarNotificacion('Error: Respuesta inválida del servidor', 'error');
-      }
-      return;
-    }
-  }
+  console.log('Total registros:', datosCompletos.registros.length); // Para debug
   
-  if (!resultado || typeof resultado !== 'object') {
-    console.error('❌ Error: Respuesta inválida:', resultado);
-    if (document.getElementById('mainScreen').classList.contains('active')) {
-      mostrarNotificacion('Error: Formato de respuesta inválido', 'error');
-    }
-    return;
-  }
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  console.log('Hoy:', hoy.toISOString().split('T')[0]); // Para debug
   
-  if (resultado.success === false) {
-    console.error('❌ Error del servidor:', resultado.message);
-    if (document.getElementById('mainScreen').classList.contains('active')) {
-      mostrarNotificacion('Error: ' + resultado.message, 'error');
-    }
-    return;
-  }
-  
-  if (resultado.success === true) {
-    console.log('✅ Dashboard cargado exitosamente');
-    datosCompletos = resultado;
+  // Filtrar solo los registros vencidos (fecha retorno < hoy y estado no finalizado)
+  registrosVencidos = datosCompletos.registros.filter(registro => {
+    const fechaRetornoStr = registro['Tiempo Estimado de Retorno'];
+    const estado = registro.Estado;
     
-    // Solo actualizar la UI si estamos en la pantalla principal
-    if (document.getElementById('mainScreen').classList.contains('active')) {
-      actualizarEstadisticas(resultado.estadisticas || {});
-      crearGraficos(resultado.estadisticas || {});
-      cargarTabla((resultado.estadisticas && resultado.estadisticas.ultimosRegistros) || []);
-      mostrarNotificacion('Dashboard actualizado correctamente', 'success');
-      
-      // Verificar vencimientos después de cargar los datos
-      setTimeout(verificarVencimientos, 1000);
-      
-      setTimeout(actualizarContadorVencidosEnDashboard, 500);
+    if (!fechaRetornoStr) {
+      console.log('Registro sin fecha de retorno:', registro.ID);
+      return false;
     }
-  } else {
-    console.error('❌ Respuesta sin propiedad success:', resultado);
-    if (document.getElementById('mainScreen').classList.contains('active')) {
-      mostrarNotificacion('Error: Formato de respuesta inválido', 'error');
+    
+    // No incluir si ya está devuelto, destruido o procesado
+    const estadosFinalizados = ['Devuelto', 'Destruido', 'Procesado'];
+    if (estado && estadosFinalizados.includes(estado)) {
+      return false;
     }
+    
+    try {
+      const fechaRetorno = parsearFechaRetorno(fechaRetornoStr);
+      console.log(`Registro ${registro.ID}: fecha retorno ${fechaRetornoStr} -> ${fechaRetorno.toISOString().split('T')[0]}`); // Para debug
+      
+      // Comparar solo la fecha (sin horas/minutos/segundos)
+      const fechaRetornoComparable = new Date(fechaRetorno.getFullYear(), fechaRetorno.getMonth(), fechaRetorno.getDate());
+      const hoyComparable = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      
+      const esVencido = fechaRetornoComparable < hoyComparable;
+      console.log(`Registro ${registro.ID}: ${fechaRetornoComparable.toISOString().split('T')[0]} < ${hoyComparable.toISOString().split('T')[0]} = ${esVencido}`); // Para debug
+      
+      return esVencido;
+    } catch (e) {
+      console.error('Error procesando fecha:', fechaRetornoStr, e);
+      return false;
+    }
+  });
+  
+  console.log('Registros vencidos encontrados:', registrosVencidos.length); // Para debug
+  
+  // Ordenar por días vencido (más antiguo primero)
+  registrosVencidos.sort((a, b) => {
+    const fechaA = parsearFechaRetorno(a['Tiempo Estimado de Retorno']);
+    const fechaB = parsearFechaRetorno(b['Tiempo Estimado de Retorno']);
+    return fechaA - fechaB;
+  });
+  
+  registrosVencidosFiltrados = [...registrosVencidos];
+  paginaActualVencidos = 1;
+  
+  actualizarEstadisticasVencidos();
+  renderizarTablaVencidos();
+  actualizarContadorNavbar();
+}
+
+// Parsear fecha de retorno
+function parsearFechaRetorno(fechaRetorno) {
+  if (!fechaRetorno) return new Date();
+  
+  try {
+    // Si es un objeto Date
+    if (fechaRetorno instanceof Date) return fechaRetorno;
+    
+    // Si es string con formato ISO
+    if (typeof fechaRetorno === 'string' && fechaRetorno.includes('T')) {
+      return new Date(fechaRetorno);
+    }
+    
+    // Si es string con formato dd/mm/yyyy
+    if (typeof fechaRetorno === 'string' && fechaRetorno.includes('/')) {
+      const partes = fechaRetorno.split('/');
+      // Asegurarse de que tenga 3 partes
+      if (partes.length === 3) {
+        const dia = parseInt(partes[0], 10);
+        const mes = parseInt(partes[1], 10) - 1; // Mes 0-indexed en JS
+        const año = parseInt(partes[2], 10);
+        return new Date(año, mes, dia);
+      }
+    }
+    
+    // Si es solo fecha yyyy-mm-dd
+    if (typeof fechaRetorno === 'string' && fechaRetorno.includes('-')) {
+      return new Date(fechaRetorno);
+    }
+    
+    // Intento por defecto
+    return new Date(fechaRetorno);
+  } catch (e) {
+    console.error('Error parseando fecha:', fechaRetorno, e);
+    return new Date(); // Fecha actual como fallback
   }
 }
 
-function errorDashboard(error) {
-  mostrarLoading(false);
-  console.error('❌ Error del servidor:', error);
+// Calcular días de vencimiento
+function calcularDiasVencido(fechaRetorno) {
+  if (!fechaRetorno) return 0;
   
-  let mensaje = 'Error del servidor: ' + (error.message || 'Error desconocido');
-  mensaje += '\n\nSugerencias:';
-  mensaje += '\n• Verifique su conexión a internet';
-  mensaje += '\n• Confirme que la aplicación esté desplegada';
-  mensaje += '\n• Contacte al administrador del sistema';
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
   
-  mostrarNotificacion(mensaje, 'error');
+  const fecha = parsearFechaRetorno(fechaRetorno);
+  const diferencia = hoy - fecha;
+  return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+}
+
+// Actualizar estadísticas de vencidos
+function actualizarEstadisticasVencidos() {
+  const totalVencidos = registrosVencidos.length;
+  let enRevision = 0;
+  let pendientes = 0;
+  let totalDias = 0;
+  
+  registrosVencidos.forEach(registro => {
+    if (registro.Estado === 'En Revisión') enRevision++;
+    if (registro.Estado === 'Pendiente por Devolución') pendientes++;
+    totalDias += calcularDiasVencido(registro['Tiempo Estimado de Retorno']);
+  });
+  
+  const promedioDias = totalVencidos > 0 ? Math.round(totalDias / totalVencidos) : 0;
+  
+  document.getElementById('totalVencidos').textContent = totalVencidos;
+  document.getElementById('vencidosEnRevision').textContent = enRevision;
+  document.getElementById('vencidosPendientes').textContent = pendientes;
+  document.getElementById('diasPromedioVencido').textContent = promedioDias;
+}
+
+// Actualizar contador en navbar
+function actualizarContadorNavbar() {
+  const contador = document.getElementById('contadorVencidos');
+  const total = registrosVencidos.length;
+  
+  if (total > 0) {
+    contador.textContent = total > 99 ? '99+' : total;
+    contador.style.display = 'inline-flex';
+  } else {
+    contador.style.display = 'none';
+  }
+}
+
+// Renderizar tabla de vencidos
+function renderizarTablaVencidos() {
+  const tbody = document.getElementById('tablaVencidosBody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  if (registrosVencidosFiltrados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--gray-400); padding: 60px 20px;">
+          <i class="fas fa-check-circle" style="font-size: 48px; margin-bottom: 16px; display: block; color: var(--success);"></i>
+          <p style="font-size: 16px; margin-bottom: 8px;">¡No hay registros vencidos!</p>
+          <small>Todos los productos están al día</small>
+        </td>
+      </tr>
+    `;
+    document.getElementById('paginacionVencidos').style.display = 'none';
+    return;
+  }
+  
+  // Paginación
+  const inicio = (paginaActualVencidos - 1) * registrosPorPaginaVencidos;
+  const fin = inicio + registrosPorPaginaVencidos;
+  const registrosPagina = registrosVencidosFiltrados.slice(inicio, fin);
+  
+  registrosPagina.forEach(registro => {
+    const tr = document.createElement('tr');
+    const diasVencido = calcularDiasVencido(registro['Tiempo Estimado de Retorno']);
+    const estadoBadge = obtenerBadgeEstado(registro.Estado);
+    
+    // Clase para resaltar según gravedad
+    let claseFilaVencido = '';
+    if (diasVencido > 30) {
+      claseFilaVencido = 'fila-vencido-critico';
+    } else if (diasVencido > 7) {
+      claseFilaVencido = 'fila-vencido-alto';
+    } else {
+      claseFilaVencido = 'fila-vencido-medio';
+    }
+    
+    tr.className = claseFilaVencido;
+    
+    tr.innerHTML = `
+      <td><strong>${registro.Código || '-'}</strong></td>
+      <td>${registro['NombreProducto'] || '-'}</td>
+      <td>${registro['Tipo de Salida'] || '-'}</td>
+      <td>${formatearFecha(registro['Fecha y Hora de Retiro'])}</td>
+      <td>${formatearFechaSimple(registro['Tiempo Estimado de Retorno'])}</td>
+      <td>
+        <span class="badge badge-dias-vencido ${diasVencido > 30 ? 'badge-error' : diasVencido > 7 ? 'badge-warning' : 'badge-info'}">
+          ${diasVencido} día${diasVencido !== 1 ? 's' : ''}
+        </span>
+      </td>
+      <td>${registro.Responsable || '-'}</td>
+      <td><span class="badge ${estadoBadge}">${registro.Estado || '-'}</span></td>
+      <td>
+        <div class="acciones-vencido">
+          <button class="btn btn-sm btn-secondary" onclick="verDetalle(${registro.ID})" title="Ver detalles">
+            <i class="fas fa-eye"></i>
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="abrirModalEdicion(${registro.ID})" title="Editar registro completo">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </td>
+    `;
+    
+    tbody.appendChild(tr);
+  });
+  
+  // Actualizar paginación
+  actualizarPaginacionVencidos();
+}
+
+// Filtrar vencidos
+function filtrarVencidos() {
+  const filtro = document.getElementById('filtroVencidos').value;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  
+  if (filtro === 'todos') {
+    registrosVencidosFiltrados = [...registrosVencidos];
+  } else {
+    registrosVencidosFiltrados = registrosVencidos.filter(registro => {
+      const fechaRetorno = parsearFechaRetorno(registro['Tiempo Estimado de Retorno']);
+      const diasVencido = Math.floor((hoy - fechaRetorno) / (1000 * 60 * 60 * 24));
+      
+      switch (filtro) {
+        case 'hoy':
+          return diasVencido === 0; // Vencido hoy (exactamente 0 días)
+        case 'semana':
+          return diasVencido <= 7 && diasVencido > 0; // Hasta 7 días (excluyendo hoy)
+        case 'mes':
+          return diasVencido <= 30 && diasVencido > 7; // Más de 7 días hasta 30
+        case 'mas30':
+          return diasVencido > 30; // Más de 30 días
+        default:
+          return true;
+      }
+    });
+  }
+  
+  paginaActualVencidos = 1;
+  renderizarTablaVencidos();
+}
+
+// Buscar en vencidos
+function buscarEnVencidos() {
+  const termino = document.getElementById('buscarVencido').value.toLowerCase().trim();
+  
+  if (!termino) {
+    registrosVencidosFiltrados = [...registrosVencidos];
+  } else {
+    registrosVencidosFiltrados = registrosVencidos.filter(registro => {
+      // CORRECCIÓN: Asegurar que el código sea tratado como string
+      const codigo = String(registro.Código || '').toLowerCase();
+      const nombre = String(registro['NombreProducto'] || '').toLowerCase();
+      const responsable = String(registro.Responsable || '').toLowerCase();
+      
+      // Buscar en todos los campos
+      return codigo.includes(termino) || 
+             nombre.includes(termino) || 
+             responsable.includes(termino);
+    });
+  }
+  
+  paginaActualVencidos = 1;
+  renderizarTablaVencidos();
+}
+
+// Paginación
+function actualizarPaginacionVencidos() {
+  const totalPaginas = Math.ceil(registrosVencidosFiltrados.length / registrosPorPaginaVencidos);
+  
+  document.getElementById('infoPaginaVencidos').textContent = `Página ${paginaActualVencidos} de ${totalPaginas || 1}`;
+  document.getElementById('btnAnteriorVencidos').disabled = paginaActualVencidos <= 1;
+  document.getElementById('btnSiguienteVencidos').disabled = paginaActualVencidos >= totalPaginas;
+  document.getElementById('paginacionVencidos').style.display = totalPaginas > 1 ? 'flex' : 'none';
+}
+
+function paginaAnteriorVencidos() {
+  if (paginaActualVencidos > 1) {
+    paginaActualVencidos--;
+    renderizarTablaVencidos();
+  }
+}
+
+function paginaSiguienteVencidos() {
+  const totalPaginas = Math.ceil(registrosVencidosFiltrados.length / registrosPorPaginaVencidos);
+  if (paginaActualVencidos < totalPaginas) {
+    paginaActualVencidos++;
+    renderizarTablaVencidos();
+  }
+}
+
+// Llamar a cargar vencidos cuando se cargue el dashboard
+function actualizarContadorVencidosEnDashboard() {
+  if (datosCompletos && datosCompletos.registros) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const vencidos = datosCompletos.registros.filter(registro => {
+      const fechaRetorno = registro['Tiempo Estimado de Retorno'];
+      if (!fechaRetorno) return false;
+      
+      const estadosFinalizados = ['Devuelto', 'Destruido', 'Procesado'];
+      if (estadosFinalizados.includes(registro.Estado)) return false;
+      
+      try {
+        const fecha = parsearFechaRetorno(fechaRetorno);
+        return fecha < hoy;
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    const contador = document.getElementById('contadorVencidos');
+    if (contador) {
+      const total = vencidos.length;
+      if (total > 0) {
+        contador.textContent = total > 99 ? '99+' : total;
+        contador.style.display = 'inline-flex';
+      } else {
+        contador.style.display = 'none';
+      }
+    }
+  }
 }
 
 </script>
