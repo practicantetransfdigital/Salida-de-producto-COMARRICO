@@ -1,22 +1,51 @@
 <script>
 
 function cargarOpcionesEstado() {
+  console.log('🔧 Cargando opciones de estado para modal de detalles...');
+  
   const selectEstado = document.getElementById('editarEstado');
+  if (!selectEstado) {
+    console.error('❌ Select no encontrado');
+    return;
+  }
+  
+  // Limpiar select
   selectEstado.innerHTML = '<option value="">Seleccione nuevo estado...</option>';
   
-  // Usar las mismas opciones que el formulario principal
-  const opcionesEstado = [
-    'En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido'
-  ];
+  // DEFINIR QUÉ ESTADOS MOSTRAR SEGÚN ROL
+  let estadosAMostrar = [];
   
-  opcionesEstado.forEach(estado => {
+  if (usuarioActual && usuarioActual.rol) {
+    const rol = usuarioActual.rol.toLowerCase();
+    console.log('🎭 Rol detectado:', rol);
+    
+    // Si es administrador
+    if (rol === 'administrador' || rol === 'admin') {
+      estadosAMostrar = ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido'];
+      console.log('👑 Administrador: mostrando 5 estados');
+    } 
+    // Si NO es administrador (calidad)
+    else {
+      estadosAMostrar = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+      console.log('🔧 Calidad: mostrando SOLO 3 estados');
+    }
+  } else {
+    // Por defecto (sin usuario)
+    estadosAMostrar = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+    console.log('⚠️ Sin usuario: mostrando 3 estados');
+  }
+  
+  console.log('📋 Estados a mostrar:', estadosAMostrar);
+  
+  // AGREGAR SOLO LOS ESTADOS PERMITIDOS
+  estadosAMostrar.forEach(estado => {
     const option = document.createElement('option');
     option.value = estado;
     option.textContent = estado;
     selectEstado.appendChild(option);
   });
   
-  // Event listener para actualizar vista previa - CORREGIDO: eliminar .clase
+  // Configurar evento para vista previa (igual que antes)
   selectEstado.addEventListener('change', function() {
     const nuevoEstado = this.value;
     const estadoNuevoElement = document.getElementById('estadoNuevoTexto');
@@ -29,48 +58,85 @@ function cargarOpcionesEstado() {
       estadoNuevoElement.className = 'badge badge-info';
     }
   });
+  
+  console.log('✅ Select cargado con', estadosAMostrar.length, 'estados');
 }
 
 async function guardarCambioEstado() {
+  console.log('🔄 Guardando cambio de estado...');
+  
   if (!registroActual) {
-    mostrarNotificacion('No hay registro seleccionado', 'error');
+    mostrarNotificacion('❌ No hay registro seleccionado', 'error');
     return;
   }
 
-  const confirmado = await confirmar(`¿Está seguro de cambiar el estado?`);
   const nuevoEstado = document.getElementById('editarEstado').value;
-  const observaciones = document.getElementById('editarObservaciones').value.trim();
   
+  // Validar estado seleccionado
   if (!nuevoEstado) {
-    mostrarNotificacion('Por favor seleccione un nuevo estado', 'error');
+    mostrarNotificacion('❌ Por favor seleccione un nuevo estado', 'error');
     return;
   }
   
+  // Validar si es el mismo estado
   if (nuevoEstado === registroActual.Estado) {
-    mostrarNotificacion('El estado seleccionado es el mismo que el actual', 'warning');
+    mostrarNotificacion('❌ El estado seleccionado es el mismo que el actual', 'warning');
     return;
   }
+  
+  // Validar que el usuario tenga permiso para este estado
+  if (usuarioActual && usuarioActual.rol) {
+    const rol = usuarioActual.rol.toLowerCase();
+    
+    if (rol !== 'administrador' && rol !== 'admin') {
+      // Para calidad, solo permitir 3 estados
+      const estadosPermitidosCalidad = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+      
+      if (!estadosPermitidosCalidad.includes(nuevoEstado)) {
+        mostrarNotificacion('❌ No tiene permiso para usar este estado', 'error');
+        return;
+      }
+    }
+  }
+  
+  // Si el estado es "Devuelto", abrir modal de devolución
+  if (nuevoEstado.toLowerCase() === 'devuelto') {
+    console.log('📦 Estado "Devuelto" seleccionado, abriendo modal de devolución');
+    abrirModalDevolucion();
+    return;
+  }
+  
+  // Para otros estados, usar confirmación
+  const confirmado = await confirmar(`¿Está seguro de cambiar el estado a "${nuevoEstado}"?`);
   
   if (!confirmado) {
-  return;
+    return;
   }
   
   mostrarLoading(true);
 
-  const nombreUser = usuarioActual.nombre;
+  const nombreUser = usuarioActual ? usuarioActual.nombre : 'Sistema';
   
   google.script.run
     .withSuccessHandler(function(resultado) {
       mostrarLoading(false);
       
+      if (typeof resultado === 'string') {
+        try {
+          resultado = JSON.parse(resultado);
+        } catch (e) {
+          console.error('Error parseando respuesta:', e);
+          mostrarNotificacion('❌ Error en formato de respuesta', 'error');
+          return;
+        }
+      }
+      
       if (resultado && resultado.success) {
         mostrarNotificacion('✅ Estado actualizado correctamente', 'success');
         
-        // Recargar datos y mostrar historial actualizado
         cargarDashboard();
         
-        // Si estamos en la pestaña de historial, recargarla
-        if (pestaniaActual === 'historial') {
+        if (pestaniaActual === 'historial' && registroActual) {
           cargarHistorialObservaciones(registroActual.ID);
         }
         
@@ -83,7 +149,7 @@ async function guardarCambioEstado() {
       mostrarLoading(false);
       mostrarNotificacion('❌ Error del servidor: ' + error.message, 'error');
     })
-    .actualizarEstadoRegistro(registroActual.ID, nuevoEstado, observaciones, nombreUser);
+    .actualizarEstadoRegistro(registroActual.ID, nuevoEstado, '', nombreUser, '');
 }
 
 function respuestaCambioEstado(resultado) {

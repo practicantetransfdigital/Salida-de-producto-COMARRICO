@@ -457,6 +457,10 @@
                 <label>Estado Actual:</label>
                 <span id="detalleEstado" class="badge">-</span>
               </div>
+              <div class="detalle-item">
+                <label>Devuelto a:</label>
+                <span id="detalledevuelto" class="valor-detalle">-</span>
+              </div>
             </div>
             
             <!-- Responsable y Ubicación -->
@@ -503,16 +507,6 @@
               <select id="editarEstado" class="form-control">
                 <option value="">Seleccione nuevo estado...</option>
               </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="editarObservaciones"><i class="fas fa-sticky-note"></i> Observaciones (Opcional)</label>
-              <textarea 
-                id="editarObservaciones" 
-                class="form-control" 
-                placeholder="Agregue observaciones sobre el cambio de estado..."
-                rows="4"
-              ></textarea>
             </div>
             
             <div class="resumen-cambio">
@@ -663,6 +657,40 @@
     </div>
   </div>
 </div>
+
+<!-- Modal de Devolución -->
+<div id="modalDevolucion" class="modal">
+  <div class="modal-content modal-medium">
+    <div class="modal-header">
+      <h2><i class="fas fa-undo-alt"></i> Registro de Devolución</h2>
+      <button class="close-btn" onclick="cerrarModalDevolucion()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="padding: 0 40px;">
+      <div class="devolucion-info">
+        <i class="fas fa-info-circle"></i>
+        <span>Ingrese los datos de la persona que recibe el producto devuelto</span>
+      </div>
+      <div class="form-group">
+        <label for="devueltoA"><i class="fas fa-user"></i> Devuelto a: <span class="required">*</span></label>
+        <input type="text" id="devueltoA" placeholder="Nombre de quien recibe" required>
+      </div>
+      <div class="form-group">
+        <label for="observacionDevolucion"><i class="fas fa-comment"></i> Observaciones:</label>
+        <textarea id="observacionDevolucion" rows="3" placeholder="Observaciones adicionales (opcional)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cerrarModalDevolucion()">
+        <i class="fas fa-times"></i> Cancelar
+      </button>
+      <button class="btn btn-primary" onclick="confirmarDevolucion()">
+        <i class="fas fa-check"></i> Confirmar Devolución
+      </button>
+    </div>
+  </div>
+</div>
   
   <?!= HtmlService.createHtmlOutputFromFile('functions/auth').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/auxiliars').getContent(); ?>
@@ -681,6 +709,7 @@
   <?!= HtmlService.createHtmlOutputFromFile('functions/editmodal').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/calculate').getContent(); ?>
   <?!= HtmlService.createHtmlOutputFromFile('functions/normalization').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('functions/modaldevolution').getContent(); ?>
 
 </body>
 </html>

@@ -1436,4 +1436,100 @@ textarea.form-control {
   }
 }
 
+/* ============================================================
+   MODAL DE DEVOLUCIÓN
+   ============================================================ */
+
+.devolucion-info {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  margin: 0 27px 27px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--info);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.devolucion-info i {
+  font-size: 18px;
+  color: var(--info);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.devolucion-info span {
+  flex: 1;
+}
+
+.form-group label .required {
+  color: var(--error);
+  margin-left: 4px;
+}
+
+textarea#observacionDevolucion {
+  min-height: 100px;
+  resize: vertical;
+  font-family: var(--font-family);
+  line-height: 1.5;
+}
+
+/* Responsive para modal de devolución */
+@media (max-width: 600px) {
+  .devolucion-info {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin: 0 15px 20px;
+    padding: 12px;
+  }
+}
+
+/* ============================================================
+   ESTILOS PARA MODALES SUPERPUESTOS
+   ============================================================ */
+
+.modal-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#modalDevolucion {
+  z-index: 1001;
+}
+
+#modalDevolucion .modal-content {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Estilo para la nota de devolución */
+.nota-devolucion {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid var(--info);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.nota-devolucion i {
+  margin-right: 6px;
+  font-size: 14px;
+}
+
 </style>

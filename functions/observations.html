@@ -24,6 +24,12 @@ function cambiarPestania(pestania) {
   } else {
     btnGuardar.style.display = 'none';
   }
+  
+  // Si es la pestaña de edición, asegurar que el estado esté vacío
+  if (pestania === 'editar') {
+    document.getElementById('editarEstado').value = '';
+    // NO hay más campo de observaciones
+  }
 }
 
 function cargarHistorialObservaciones(idRegistro) {
@@ -104,6 +110,9 @@ function mostrarObservaciones(observaciones) {
   let html = '';
   
   observaciones.forEach(obs => {
+    // Verificar si es una devolución
+    const esDevolucion = obs.estadoNuevo.toLowerCase() === 'devuelto';
+    
     html += `
       <div class="observacion-item">
         <div class="observacion-header">
@@ -111,6 +120,11 @@ function mostrarObservaciones(observaciones) {
             <span class="badge ${obtenerBadgeEstado(obs.estadoAnterior)}">${obs.estadoAnterior}</span>
             <i class="fas fa-arrow-right" style="color: var(--gray-400); font-size: 12px;"></i>
             <span class="badge ${obtenerBadgeEstado(obs.estadoNuevo)}">${obs.estadoNuevo}</span>
+            ${esDevolucion && obs.devueltoA ? 
+              `<span class="badge badge-info" style="margin-left: 8px;">
+                <i class="fas fa-user-check"></i> Devuelto a: ${obs.devueltoA}
+              </span>` : ''
+            }
           </div>
           <div class="observacion-fecha">${formatearFecha(obs.fecha)}</div>
         </div>

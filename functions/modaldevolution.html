@@ -1,0 +1,138 @@
+<script>
+
+function abrirModalDevolucion() {
+  console.log('📦 Abriendo modal de devolución para registro:', registroActual);
+  
+  // NO cerrar el modal de detalles - solo agregar clase para ocultarlo temporalmente
+  const modalDetalles = document.getElementById('modalDetalles');
+  modalDetalles.classList.add('modal-hidden');
+  
+  // Mostrar modal de devolución ENCIMA del modal de detalles
+  const modalDevolucion = document.getElementById('modalDevolucion');
+  modalDevolucion.classList.add('active');
+  modalDevolucion.style.zIndex = '1001'; // Un nivel más alto que el modal de detalles
+  
+  // Limpiar campos
+  document.getElementById('devueltoA').value = '';
+  document.getElementById('observacionDevolucion').value = '';
+  
+  // Enfocar primer campo
+  setTimeout(() => {
+    document.getElementById('devueltoA').focus();
+  }, 300);
+}
+
+function cerrarModalDevolucion() {
+  console.log('❌ Cerrando modal de devolución');
+  
+  // Ocultar modal de devolución
+  const modalDevolucion = document.getElementById('modalDevolucion');
+  modalDevolucion.classList.remove('active');
+  modalDevolucion.style.zIndex = '';
+  
+  // Mostrar nuevamente el modal de detalles
+  const modalDetalles = document.getElementById('modalDetalles');
+  modalDetalles.classList.remove('modal-hidden');
+}
+
+// En confirmarDevolucion - Asegúrate de que no esté buscando editarObservaciones
+function confirmarDevolucion() {
+  console.log('✅ Confirmando devolución');
+  
+  const devueltoA = document.getElementById('devueltoA').value.trim();
+  const observacionDevolucion = document.getElementById('observacionDevolucion').value.trim();
+  
+  // Validación
+  if (!devueltoA) {
+    mostrarNotificacion('❌ Ingrese el nombre de la persona que recibe el producto', 'error');
+    document.getElementById('devueltoA').focus();
+    return;
+  }
+  
+  // Verificar que tenemos los datos necesarios
+  if (!registroActual) {
+    mostrarNotificacion('❌ Error: No hay registro seleccionado', 'error');
+    cerrarModalDevolucion();
+    return;
+  }
+  
+  // Obtener solo el estado del formulario de edición
+  const nuevoEstado = document.getElementById('editarEstado').value;
+  
+  if (!nuevoEstado || nuevoEstado.toLowerCase() !== 'devuelto') {
+    mostrarNotificacion('❌ Error: El estado debe ser "Devuelto"', 'error');
+    cerrarModalDevolucion();
+    return;
+  }
+  
+  // Usar solo las observaciones del modal de devolución
+  const observacionFinal = observacionDevolucion || '';
+  
+  // Ejecutar cambio de estado con DevueltoA en parámetro separado
+  ejecutarCambioEstadoCompleto(
+    registroActual.ID,
+    nuevoEstado,
+    observacionFinal,  // Solo observaciones del modal de devolución
+    devueltoA
+  );
+}
+
+function ejecutarCambioEstadoCompleto(idRegistro, nuevoEstado, observacion, devueltoA) {
+  console.log('🔄 Ejecutando cambio de estado completo:', {
+    idRegistro,
+    nuevoEstado,
+    observacion,
+    devueltoA
+  });
+  
+  mostrarLoading(true);
+  
+  const nombreUser = usuarioActual ? usuarioActual.nombre : 'Sistema';
+  
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarLoading(false);
+      
+      // Manejar respuesta
+      if (typeof resultado === 'string') {
+        try {
+          resultado = JSON.parse(resultado);
+        } catch (e) {
+          console.error('Error parseando respuesta:', e);
+          mostrarNotificacion('❌ Error en formato de respuesta', 'error');
+          return;
+        }
+      }
+      
+      if (resultado && resultado.success) {
+        let mensaje = '✅ Producto devuelto correctamente';
+        if (devueltoA) {
+          mensaje += ` a: ${devueltoA}`;
+        }
+        mostrarNotificacion(mensaje, 'success');
+        
+        // Cerrar ambos modales
+        cerrarModalDevolucion();
+        cerrarModalDetalles();
+        
+        // Recargar datos
+        setTimeout(() => {
+          if (datosCompletos) {
+            forzarRefrescoCompleto();
+          } else {
+            cargarDashboard();
+          }
+        }, 1000);
+        
+      } else {
+        mostrarNotificacion('❌ Error al registrar devolución: ' + (resultado?.message || 'Error desconocido'), 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarLoading(false);
+      mostrarNotificacion('❌ Error del servidor: ' + error.message, 'error');
+    })
+    .actualizarEstadoRegistro(idRegistro, nuevoEstado, observacion, nombreUser, devueltoA);
+}
+
+</script>

@@ -1,4 +1,153 @@
 <script>
+
+  function cargarOpcionesFormulario() {
+  console.log('📋 Cargando opciones para formularios...');
+  
+  google.script.run
+    .withSuccessHandler((resultado) => {
+      console.log('✅ Opciones recibidas del servidor:', resultado);
+      
+      if (!resultado || typeof resultado !== 'object') {
+        console.error('❌ Opciones inválidas:', resultado);
+        usarOpcionesPorDefecto();
+        return;
+      }
+      
+      if (resultado.success === false) {
+        console.error('❌ Error del servidor:', resultado.message);
+        usarOpcionesPorDefecto();
+        return;
+      }
+      
+      // Cargar tipos de salida
+      if (resultado.tiposSalida && Array.isArray(resultado.tiposSalida)) {
+        llenarSelect('tipoSalida', resultado.tiposSalida);
+      } else {
+        console.warn('⚠️ Tipos de salida no disponibles');
+        llenarSelect('tipoSalida', [
+          'Control de Calidad', 
+          'Gasificación', 
+          'Destrucción', 
+          'Para Revisión', 
+          'Reproceso', 
+          'Devolución a Proveedor', 
+          'Otro'
+        ]);
+      }
+      
+      // Cargar tipos de plaga
+      if (resultado.tiposPlagas && Array.isArray(resultado.tiposPlagas)) {
+        llenarSelect('tipoPlaga', resultado.tiposPlagas);
+      } else {
+        console.warn('⚠️ Tipos de plaga no disponibles');
+        llenarSelect('tipoPlaga', [
+          'N/A',
+          'Insectos',
+          'Roedores', 
+          'Hongos',
+          'Contaminación',
+          'Otro'
+        ]);
+      }
+      
+      // Cargar estados según el rol del usuario
+      let estadosDisponibles = [];
+      
+      if (usuarioActual && usuarioActual.rol) {
+        const rol = usuarioActual.rol.toLowerCase();
+        
+        if (rol === 'administrador' || rol === 'admin') {
+          // Administrador: todos los estados
+          estadosDisponibles = resultado.estados || [
+            'En Revisión',
+            'Devuelto',
+            'Pendiente por Devolución',
+            'Procesado',
+            'Destruido'
+          ];
+          console.log('🛡️ Administrador: mostrando todos los estados');
+        } else {
+          // Calidad: solo 3 estados
+          estadosDisponibles = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+          console.log('🔧 Calidad: mostrando solo 3 estados');
+        }
+      } else {
+        // Sin usuario: solo estados básicos
+        estadosDisponibles = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+        console.log('⚠️ Sin usuario: mostrando estados básicos');
+      }
+      
+      llenarSelect('estado', estadosDisponibles);
+      
+      // Establecer valores por defecto
+      document.getElementById('tipoPlaga').value = 'N/A';
+      
+      if (usuarioActual && usuarioActual.rol) {
+        const rol = usuarioActual.rol.toLowerCase();
+        if (rol !== 'administrador' && rol !== 'admin') {
+          // Calidad: por defecto "En Revisión"
+          document.getElementById('estado').value = 'En Revisión';
+        }
+      } else {
+        document.getElementById('estado').value = 'En Revisión';
+      }
+      
+      console.log('✅ Opciones de formulario cargadas correctamente');
+    })
+    .withFailureHandler((error) => {
+      console.error('❌ Error al cargar opciones:', error);
+      usarOpcionesPorDefecto();
+    })
+    .obtenerOpciones();
+}
+
+function usarOpcionesPorDefecto() {
+  console.log('⚠️ Usando opciones por defecto...');
+  
+  // Tipos de salida por defecto
+  llenarSelect('tipoSalida', [
+    'Control de Calidad', 
+    'Gasificación', 
+    'Destrucción', 
+    'Para Revisión', 
+    'Reproceso', 
+    'Devolución a Proveedor', 
+    'Otro'
+  ]);
+  
+  // Tipos de plaga por defecto
+  llenarSelect('tipoPlaga', [
+    'N/A',
+    'Insectos',
+    'Roedores', 
+    'Hongos',
+    'Contaminación',
+    'Otro'
+  ]);
+  
+  // Estados según rol del usuario
+  let estadosDisponibles = [];
+  
+  if (usuarioActual && usuarioActual.rol) {
+    const rol = usuarioActual.rol.toLowerCase();
+    
+    if (rol === 'administrador' || rol === 'admin') {
+      estadosDisponibles = ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido'];
+    } else {
+      estadosDisponibles = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+    }
+  } else {
+    estadosDisponibles = ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
+  }
+  
+  llenarSelect('estado', estadosDisponibles);
+  
+  // Valores por defecto
+  document.getElementById('tipoPlaga').value = 'N/A';
+  document.getElementById('estado').value = 'En Revisión';
+  
+  console.log('✅ Opciones por defecto cargadas');
+}
     
 function abrirModalRegistro() {
   document.getElementById('modalRegistro').classList.add('active');
@@ -185,25 +334,79 @@ function errorGuardar(error, btnGuardar, textoOriginal) {
   mostrarNotificacion('Error del servidor: ' + (error.message || 'Error desconocido'), 'error');
 }
 
-function cargarOpcionesFormulario() {
-  google.script.run
-    .withSuccessHandler((opciones) => {
-      if (!opciones || typeof opciones !== 'object') {
-        console.error('❌ Opciones inválidas:', opciones);
-        return;
-      }
+function configurarEventoCambioEstado() {
+  const selectEstado = document.getElementById('editarEstado');
+  const notaDevolucion = document.querySelector('.nota-devolucion');
+  
+  if (!selectEstado) return;
+  
+  // Clonar y reemplazar para evitar duplicación de event listeners
+  const nuevoSelect = selectEstado.cloneNode(true);
+  if (selectEstado.parentNode) {
+    selectEstado.parentNode.replaceChild(nuevoSelect, selectEstado);
+  }
+  
+  // Agregar event listener al nuevo select
+  nuevoSelect.addEventListener('change', function() {
+    const nuevoEstado = this.value;
+    const estadoNuevoElement = document.getElementById('estadoNuevoTexto');
+    
+    if (nuevoEstado) {
+      estadoNuevoElement.textContent = nuevoEstado;
+      estadoNuevoElement.className = 'badge ' + obtenerBadgeEstado(nuevoEstado);
       
-      llenarSelect('tipoSalida', opciones.tiposSalida);
-      llenarSelect('tipoPlaga', opciones.tiposPlagas);
-      llenarSelect('estado', opciones.estados);
-    })
-    .withFailureHandler((error) => {
-      console.error('❌ Error al cargar opciones:', error);
-      // Usar opciones por defecto incluyendo "Vencido"
-      llenarSelect('tipoSalida', ['Control de Calidad', 'Gasificación', 'Destrucción', 'Para Revisión', 'Reproceso', 'Devolución a Proveedor', 'Otro']);
-      llenarSelect('tipoPlaga', ['N/A', 'Insectos', 'Roedores', 'Hongos', 'Contaminación', 'Otro']);
-      llenarSelect('estado', ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido']);
-    })
-    .obtenerOpciones();
+      // Mostrar nota si es "Devuelto"
+      if (notaDevolucion) {
+        if (nuevoEstado.toLowerCase() === 'devuelto') {
+          notaDevolucion.style.display = 'block';
+        } else {
+          notaDevolucion.style.display = 'none';
+        }
+      }
+    } else {
+      estadoNuevoElement.textContent = 'Seleccione estado';
+      estadoNuevoElement.className = 'badge badge-info';
+      if (notaDevolucion) {
+        notaDevolucion.style.display = 'none';
+      }
+    }
+  });
+}
+
+function configurarEventoCambioEstado() {
+  const selectEstado = document.getElementById('editarEstado');
+  const notaDevolucion = document.querySelector('.nota-devolucion');
+  
+  if (!selectEstado) return;
+  
+  // Remover event listeners anteriores
+  const nuevoSelect = selectEstado.cloneNode(true);
+  selectEstado.parentNode.replaceChild(nuevoSelect, selectEstado);
+  
+  // Agregar nuevo event listener
+  nuevoSelect.addEventListener('change', function() {
+    const nuevoEstado = this.value;
+    const estadoNuevoElement = document.getElementById('estadoNuevoTexto');
+    
+    if (nuevoEstado) {
+      estadoNuevoElement.textContent = nuevoEstado;
+      estadoNuevoElement.className = 'badge ' + obtenerBadgeEstado(nuevoEstado);
+      
+      // Mostrar/ocultar nota sobre devolución
+      if (notaDevolucion) {
+        if (nuevoEstado.toLowerCase() === 'devuelto') {
+          notaDevolucion.style.display = 'block';
+        } else {
+          notaDevolucion.style.display = 'none';
+        }
+      }
+    } else {
+      estadoNuevoElement.textContent = 'Seleccione estado';
+      estadoNuevoElement.className = 'badge badge-info';
+      if (notaDevolucion) {
+        notaDevolucion.style.display = 'none';
+      }
+    }
+  });
 }
 </script>

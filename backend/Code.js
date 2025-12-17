@@ -62,18 +62,23 @@ function autenticarUsuario(usuario, contrasena) {
     
     Logger.log('📊 Filas en USUARIOS: ' + data.length);
     
-    // Buscar usuario (empezar desde fila 1 para saltar encabezados)
+    // Buscar usuario
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       if (row[0] && row[0].toString().trim() !== '' && 
           row[0].toString().toLowerCase() === usuario.toLowerCase() && 
           row[1] === contrasena) {
         
-        Logger.log('✅ Usuario autenticado: ' + row[0]);
+        Logger.log('✅ Usuario autenticado: ' + row[0] + ' - Rol: ' + row[2]);
+        
+        // Asegurar que el rol esté en formato correcto
+        let rol = row[2] || 'Calidad';
+        rol = rol.trim();
+        
         return {
           success: true,
           usuario: row[0],
-          rol: row[2] || 'Usuario',
+          rol: rol,
           nombre: row[3] || row[0]
         };
       }
@@ -108,24 +113,6 @@ function obtenerDatosDashboard() {
     
     Logger.log('📈 SALIDAS - Filas: ' + lastRow + ', Columnas: ' + lastColumn);
     
-    // Si no hay datos, retornar estructura vacía
-    if (lastRow <= 1) {
-      Logger.log('ℹ️ No hay datos en SALIDAS, retornando estructura vacía');
-      return JSON.stringify({
-        success: true,
-        registros: [],
-        estadisticas: {
-          totalSalidas: 0,
-          porTipoSalida: {},
-          porTipoPlaga: {},
-          porPasillo: {},
-          porEstado: {},
-          ultimosRegistros: []
-        },
-        mensaje: 'No hay registros en el sistema'
-      });
-    }
-    
     // Obtener datos
     var data = sheet.getDataRange().getValues();
     var headers = data[0];
@@ -134,16 +121,17 @@ function obtenerDatosDashboard() {
     
     var registros = [];
     
-    // Procesar registros con nueva estructura
+    // Procesar registros
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
-      if (row[0] && row[0].toString().trim() !== '') { // Si tiene ID válido
+      if (row[0] && row[0].toString().trim() !== '') {
         var registro = {};
         for (var j = 0; j < headers.length; j++) {
           var headerName = headers[j];
-          // Corregir nombre de fecha para coincidir con frontend
           if (headerName === 'Fecha') {
             registro['Fecha y Hora de Retiro'] = row[j];
+          } else if (headerName === 'DevueltoA') {
+            registro['DevueltoA'] = row[j] || '';
           } else {
             registro[headerName] = row[j];
           }
@@ -321,6 +309,13 @@ function registrarSalida(datos) {
     
     Logger.log('📝 Insertando fila: ' + JSON.stringify(nuevaFila));
     sheet.appendRow(nuevaFila);
+
+    try {
+  enviarCorreoNuevoRegistro(datos, nuevoID);
+  Logger.log('✅ Correo de nuevo registro enviado');
+} catch (e) {
+  Logger.log('⚠️ Correo no enviado: ' + e.toString());
+}
     
     return {
       success: true,
@@ -343,54 +338,118 @@ function registrarSalida(datos) {
 // FUNCIONES DE DIAGNÓSTICO
 // ============================================================
 
-function actualizarEstadoRegistro(id, nuevoEstado, observaciones, usuario = 'Sistema') {
+function actualizarEstadoRegistro(id, nuevoEstado, observaciones = '', usuario = 'Sistema', devueltoA = '') {
+  console.log('🔄 Actualizando estado del registro:', {id, nuevoEstado, usuario, devueltoA, observaciones});
+  
   try {
     const sheet = getSheet('SALIDAS');
     const data = sheet.getDataRange().getValues();
+    const headers = data[0];
     
     let estadoAnterior = '';
     let filaIndex = -1;
     
-    // Buscar la fila con el ID y obtener estado anterior
+    // Buscar la fila con el ID
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] == id) {
-        estadoAnterior = data[i][10] || 'Desconocido'; 
+        estadoAnterior = data[i][10] || 'Desconocido';
         filaIndex = i + 1;
         break;
       }
     }
     
     if (filaIndex === -1) {
-      return { success: false, message: 'No se encontró el registro' };
+      return JSON.stringify({
+        success: false, 
+        message: 'No se encontró el registro con ID: ' + id
+      });
     }
     
-    // Actualizar estado en hoja SALIDAS (columna 11, índice 10)
+    // 1. Actualizar estado
     sheet.getRange(filaIndex, 11).setValue(nuevoEstado);
     
-    // Guardar observación en hoja OBSERVACIONES
-    const resultadoObservacion = guardarObservacion(
-      id, 
-      estadoAnterior, 
-      nuevoEstado, 
-      observaciones,
-      usuario
-    );
+    // 2. Si es devolución, guardar DevueltoA
+    if (nuevoEstado.toLowerCase() === 'devuelto' && devueltoA) {
+      const devueltoAIndex = headers.indexOf('DevueltoA');
+      if (devueltoAIndex !== -1) {
+        sheet.getRange(filaIndex, devueltoAIndex + 1).setValue(devueltoA);
+      } else {
+        sheet.getRange(filaIndex, 12).setValue(devueltoA);
+      }
+    }
     
-    Logger.log(`✅ Estado actualizado: ID ${id} - ${estadoAnterior} → ${nuevoEstado} por ${usuario}`);
+    // ============================================
+    // ENVIAR CORREO DE DEVOLUCIÓN SI SE MARCA COMO DEVUELTO
+    // ============================================
+    if (nuevoEstado.toLowerCase() === 'devuelto') {
+      try {
+        // Buscar el registro completo
+        const registroCompleto = {};
+        for (let j = 0; j < headers.length; j++) {
+          registroCompleto[headers[j]] = data[filaIndex - 1][j];
+        }
+        registroCompleto.ID = id;
+        
+        // Enviar correo de devolución
+        enviarCorreoProductoDevuelto(registroCompleto, devueltoA, observaciones, usuario);
+        Logger.log('✅ Correo de devolución enviado');
+      } catch (e) {
+        Logger.log('⚠️ Correo de devolución no enviado: ' + e.toString());
+      }
+    }
     
-    return { 
+    // ============================================
+    // SI SE MARCA COMO VENCIDO, ENVIAR CORREO
+    // ============================================
+    if (nuevoEstado.toLowerCase() === 'vencido') {
+      try {
+        // Buscar el registro completo
+        const registroCompleto = {};
+        for (let j = 0; j < headers.length; j++) {
+          registroCompleto[headers[j]] = data[filaIndex - 1][j];
+        }
+        registroCompleto.ID = id;
+        
+        // Enviar correo de vencido
+        enviarCorreoProductoVencido(registroCompleto);
+      } catch (e) {
+        Logger.log('⚠️ Correo de vencido no enviado: ' + e.toString());
+      }
+    }
+    
+    // 3. Guardar observaciones en hoja OBSERVACIONES (si las hay)
+    if (observaciones || nuevoEstado.toLowerCase() === 'devuelto') {
+      const resultadoObservacion = guardarObservacion(
+        id, 
+        estadoAnterior, 
+        nuevoEstado, 
+        observaciones,
+        usuario,
+        devueltoA
+      );
+    }
+    
+    console.log(`✅ Estado actualizado: ${estadoAnterior} → ${nuevoEstado}`);
+    
+    return JSON.stringify({ 
       success: true, 
       message: 'Estado actualizado correctamente',
-      idObservacion: resultadoObservacion.id
-    };
+      id: id,
+      estadoAnterior: estadoAnterior,
+      estadoNuevo: nuevoEstado,
+      devueltoA: devueltoA || ''
+    });
     
   } catch (error) {
-    Logger.log('❌ Error actualizando estado: ' + error.toString());
-    return { success: false, message: 'Error: ' + error.message };
+    console.log('❌ Error actualizando estado: ' + error.toString());
+    return JSON.stringify({ 
+      success: false, 
+      message: 'Error: ' + error.message 
+    });
   }
 }
 
-function guardarObservacion(idRegistro, estadoAnterior, estadoNuevo, observaciones, usuario = 'Sistema') {
+function guardarObservacion(idRegistro, estadoAnterior, estadoNuevo, observaciones = '', usuario = 'Sistema', devueltoA = '') {
   try {
     const sheet = getSheet('OBSERVACIONES', true);
     const lastRow = sheet.getLastRow();
@@ -406,7 +465,8 @@ function guardarObservacion(idRegistro, estadoAnterior, estadoNuevo, observacion
       estadoNuevo,
       observaciones || '',
       fechaFormateada,
-      usuario
+      usuario,
+      devueltoA || ''  // Nueva columna para DevueltoA
     ];
     
     sheet.appendRow(nuevaFila);
@@ -754,4 +814,236 @@ function obtenerEstadisticasCruzadas() {
       message: error.toString()
     };
   }
+}
+
+// ============================================================
+// VERIFICACIÓN MEJORADA - CON MÁS LOGS PARA DEBUG
+// ============================================================
+
+function verificarVencimientosYEnviarCorreos() {
+  Logger.log('=========================================');
+  Logger.log('🔍 INICIANDO VERIFICACIÓN DE VENCIMIENTOS');
+  Logger.log('=========================================');
+  
+  try {
+    const sheet = getSheet('SALIDAS');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    Logger.log('📊 Total registros: ' + data.length);
+    Logger.log('📋 Encabezados: ' + JSON.stringify(headers));
+    
+    // Encontrar índices de columnas
+    const idxID = 0;
+    const idxFechaRetorno = headers.indexOf('Tiempo Estimado de Retorno');
+    const idxEstado = headers.indexOf('Estado');
+    const idxResponsable = headers.indexOf('Responsable');
+    const idxCodigo = headers.indexOf('Código');
+    const idxProducto = headers.indexOf('NombreProducto');
+    
+    Logger.log(`🔍 Índices: FechaRetorno=${idxFechaRetorno}, Estado=${idxEstado}, Responsable=${idxResponsable}`);
+    
+    if (idxFechaRetorno === -1) {
+      Logger.log('❌ ERROR: No se encontró columna "Tiempo Estimado de Retorno"');
+      return { 
+        success: false, 
+        message: 'Columna "Tiempo Estimado de Retorno" no encontrada' 
+      };
+    }
+    
+    let correosEnviados = {
+      alertas2Dias: 0,
+      vencidos: 0,
+      errores: 0
+    };
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    Logger.log('📅 Hoy: ' + hoy.toLocaleDateString('es-CO'));
+    
+    // Procesar cada registro
+    for (let i = 1; i < data.length; i++) {
+      try {
+        const id = data[i][idxID];
+        const estado = data[i][idxEstado] || '';
+        const fechaRetorno = data[i][idxFechaRetorno];
+        const responsable = data[i][idxResponsable] || '';
+        const codigo = data[i][idxCodigo] || '';
+        const producto = data[i][idxProducto] || '';
+        
+        Logger.log(`\n📋 Registro #${id}: ${codigo} - ${producto}`);
+        Logger.log(`   Estado: ${estado}, Fecha Retorno: ${fechaRetorno}`);
+        
+        // Saltar si ya está finalizado
+        if (['Devuelto', 'Procesado', 'Destruido'].includes(estado)) {
+          Logger.log(`   ⏭️ Saltando: Estado finalizado (${estado})`);
+          continue;
+        }
+        
+        // Saltar si no hay fecha de retorno
+        if (!fechaRetorno) {
+          Logger.log(`   ⚠️ Sin fecha de retorno`);
+          continue;
+        }
+        
+        // Parsear fecha
+        let fechaRetornoDate;
+        try {
+          if (typeof fechaRetorno === 'object' && fechaRetorno instanceof Date) {
+            fechaRetornoDate = fechaRetorno;
+          } else if (typeof fechaRetorno === 'string') {
+            // Intentar diferentes formatos
+            if (fechaRetorno.includes('/')) {
+              const [dia, mes, año] = fechaRetorno.split('/');
+              fechaRetornoDate = new Date(año, mes - 1, dia);
+            } else if (fechaRetorno.includes('-')) {
+              fechaRetornoDate = new Date(fechaRetorno);
+            } else {
+              fechaRetornoDate = new Date(fechaRetorno);
+            }
+          } else {
+            fechaRetornoDate = new Date(fechaRetorno);
+          }
+          
+          fechaRetornoDate.setHours(0, 0, 0, 0);
+          
+          if (isNaN(fechaRetornoDate.getTime())) {
+            Logger.log(`   ❌ Fecha inválida: ${fechaRetorno}`);
+            correosEnviados.errores++;
+            continue;
+          }
+          
+          // Calcular diferencia en días
+          const diffTiempo = fechaRetornoDate.getTime() - hoy.getTime();
+          const diffDias = Math.ceil(diffTiempo / (1000 * 60 * 60 * 24));
+          
+          Logger.log(`   📅 Fecha parseada: ${fechaRetornoDate.toLocaleDateString()}`);
+          Logger.log(`   ⏳ Diferencia: ${diffDias} días`);
+          
+          // Crear objeto registro para enviar correo
+          const registro = {
+            ID: id,
+            Código: codigo,
+            NombreProducto: producto,
+            Estado: estado,
+            'Tiempo Estimado de Retorno': fechaRetorno,
+            Responsable: responsable,
+            'Fecha y Hora de Retiro': data[i][headers.indexOf('Fecha y Hora de Retiro')] || ''
+          };
+          
+          // Si está vencido (días negativos) y NO está ya marcado como Vencido
+          if (diffDias < 0) {
+            const diasVencido = Math.abs(diffDias);
+            Logger.log(`   ⚠️ VENCIDO hace ${diasVencido} días`);
+            
+            if (estado !== 'Vencido') {
+              Logger.log(`   📧 Enviando correo de vencido...`);
+              
+              // Enviar correo de vencido
+              const correoEnviado = enviarCorreoProductoVencido(registro);
+              
+              if (correoEnviado) {
+                correosEnviados.vencidos++;
+                Logger.log(`   ✅ Correo de vencido enviado`);
+                
+                // Actualizar estado a Vencido
+                sheet.getRange(i + 1, idxEstado + 1).setValue('Vencido');
+                Logger.log(`   ✏️ Estado actualizado a "Vencido"`);
+              } else {
+                Logger.log(`   ❌ Falló envío de correo vencido`);
+              }
+            } else {
+              Logger.log(`   ⏭️ Ya está marcado como Vencido`);
+            }
+          }
+          // Si faltan 2 días o menos (pero aún no vence)
+          else if (diffDias <= 2 && diffDias > 0) {
+            Logger.log(`   🔔 Vence en ${diffDias} día(s)`);
+            Logger.log(`   📧 Enviando correo de alerta...`);
+            
+            // ENVIAR CORREO DE ALERTA 2 DÍAS
+            const correoEnviado = enviarCorreoAlertaVencimiento(registro);
+            
+            if (correoEnviado) {
+              correosEnviados.alertas2Dias++;
+              Logger.log(`   ✅ Correo de alerta enviado`);
+            } else {
+              Logger.log(`   ❌ Falló envío de correo alerta`);
+            }
+          }
+          // Si ya vence hoy
+          else if (diffDias === 0) {
+            Logger.log(`   ⚠️ VENCE HOY`);
+            Logger.log(`   📧 Enviando correo de alerta HOY...`);
+            
+            // También enviar alerta si vence hoy
+            const correoEnviado = enviarCorreoAlertaVencimiento(registro);
+            
+            if (correoEnviado) {
+              correosEnviados.alertas2Dias++;
+              Logger.log(`   ✅ Correo de alerta HOY enviado`);
+            }
+          }
+          
+        } catch (parseError) {
+          Logger.log(`   ❌ Error parseando fecha ${fechaRetorno}: ${parseError}`);
+          correosEnviados.errores++;
+        }
+        
+      } catch (rowError) {
+        Logger.log(`   ❌ Error procesando fila ${i}: ${rowError}`);
+        correosEnviados.errores++;
+      }
+    }
+    
+    Logger.log('=========================================');
+    Logger.log(`✅ VERIFICACIÓN COMPLETADA`);
+    Logger.log(`📧 Correos enviados:`);
+    Logger.log(`   • Alertas (2 días o menos): ${correosEnviados.alertas2Dias}`);
+    Logger.log(`   • Productos vencidos: ${correosEnviados.vencidos}`);
+    Logger.log(`   • Errores: ${correosEnviados.errores}`);
+    Logger.log('=========================================');
+    
+    return {
+      success: true,
+      message: `Verificación completada: ${correosEnviados.alertas2Dias} alertas, ${correosEnviados.vencidos} vencidos`,
+      alertas: correosEnviados
+    };
+    
+  } catch (error) {
+    Logger.log('❌ ERROR CRÍTICO en verificación: ' + error.toString());
+    Logger.log('Stack: ' + error.stack);
+    return { 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    };
+  }
+}
+
+/**
+ * Función para ejecutar desde el frontend
+ */
+function ejecutarVerificacionCorreos() {
+  return verificarVencimientosYEnviarCorreos();
+}
+
+function configurarTriggerDiario() {
+  // Eliminar triggers existentes
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'verificarVencimientosYEnviarCorreos') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  
+  // Crear trigger diario a las 8:00 AM
+  ScriptApp.newTrigger('verificarVencimientosYEnviarCorreos')
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .create();
+    
+  Logger.log('✅ Trigger diario configurado para las 8:00 AM');
+  return '✅ Trigger automático configurado. Se ejecutará todos los días a las 8:00 AM';
 }

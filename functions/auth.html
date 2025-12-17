@@ -1,4 +1,23 @@
 <script>
+
+  // Ejecuta esto desde la consola para ver qué pasa
+function verificarEstados() {
+  console.log('=== VERIFICACIÓN ===');
+  console.log('Usuario:', usuarioActual);
+  console.log('Rol:', usuarioActual?.rol);
+  
+  const select = document.getElementById('editarEstado');
+  if (!select) {
+    console.log('❌ Select no encontrado');
+    return;
+  }
+  
+  console.log('Opciones en el select:');
+  for (let i = 0; i < select.options.length; i++) {
+    console.log(`  [${i}] ${select.options[i].text}`);
+  }
+  console.log('=== FIN ===');
+}
     
 function iniciarSesion() {
   const usuario = document.getElementById('usuario').value.trim();
@@ -36,16 +55,29 @@ function respuestaLogin(resultado) {
   if (resultado && resultado.success) {
     usuarioActual = resultado;
     document.getElementById('userName').textContent = resultado.nombre || resultado.usuario;
-    document.getElementById('userRole').textContent = resultado.rol;
-    document.getElementById('userRole').className = 'badge badge-info';
     
-    // Cambiar a la pantalla principal PRIMERO
+    // Calcular permisos según el rol
+    if (!usuarioActual.permisos) {
+      usuarioActual.permisos = obtenerPermisosPorRol(usuarioActual.rol);
+    }
+    
+    const userRoleElement = document.getElementById('userRole');
+    const rol = resultado.rol;
+    
+    userRoleElement.textContent = rol;
+    
+    // Asignar color según rol
+    if (rol.toLowerCase() === 'administrador' || rol.toLowerCase() === 'admin') {
+      userRoleElement.className = 'badge badge-error';
+    } else {
+      userRoleElement.className = 'badge badge-success';
+    }
+    
+    // Cambiar a la pantalla principal
     cambiarPantalla('mainScreen');
     
-    // MOSTRAR LOADING inmediatamente en la pantalla principal
+    // Cargar dashboard
     mostrarLoading(true);
-    
-    // LUEGO cargar el dashboard
     console.log('🚀 Iniciando carga inmediata del dashboard...');
     cargarDashboard();
     
@@ -55,6 +87,18 @@ function respuestaLogin(resultado) {
     limpiarError();
   } else {
     mostrarError(resultado?.message || 'Error desconocido en autenticación');
+  }
+}
+
+// Función para obtener permisos según el rol
+function obtenerPermisosPorRol(rol) {
+  const rolLower = rol ? rol.toLowerCase() : 'calidad';
+  
+  if (rolLower === 'administrador' || rolLower === 'admin') {
+    return ['En Revisión', 'Devuelto', 'Pendiente por Devolución', 'Procesado', 'Destruido'];
+  } else {
+    // Para calidad o cualquier otro rol
+    return ['En Revisión', 'Devuelto', 'Pendiente por Devolución'];
   }
 }
 

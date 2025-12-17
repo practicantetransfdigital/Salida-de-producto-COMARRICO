@@ -48,28 +48,41 @@ function verDetalle(id) {
 function mostrarModalDetalles(registro) {
   console.log('📋 Mostrando detalles del registro:', registro);
   
-  // Actualizar título con código
+  registroActual = registro;
+  
+  // Actualizar título
   document.getElementById('tituloCodigo').textContent = registro.Código || 'Sin código';
   
-  // Llenar información de detalles
+  // Llenar información
   llenarDetallesRegistro(registro);
   
-  // Configurar estado actual para edición - CORREGIDO: eliminar .clase
+  // Configurar estado actual
   const estadoActual = registro.Estado || 'Desconocido';
   document.getElementById('estadoActualTexto').textContent = estadoActual;
   document.getElementById('estadoActualTexto').className = 'badge ' + obtenerBadgeEstado(estadoActual);
   
-  // Resetear formulario de edición
+  // Resetear formulario
   document.getElementById('editarEstado').value = '';
-  document.getElementById('editarObservaciones').value = '';
   document.getElementById('estadoNuevoTexto').textContent = 'Seleccione estado';
   document.getElementById('estadoNuevoTexto').className = 'badge badge-info';
   
-  // Mostrar pestaña de detalles por defecto
+  // Ocultar nota inicialmente
+  const notaDevolucion = document.querySelector('.nota-devolucion');
+  if (notaDevolucion) {
+    notaDevolucion.style.display = 'none';
+  }
+  
+  // Cargar opciones de estado FILTRADAS según rol
+  console.log('🔄 Cargando opciones de estado filtradas...');
+  cargarOpcionesEstado();
+  
+  // Mostrar pestaña de detalles
   cambiarPestania('detalles');
   
   // Mostrar modal
   document.getElementById('modalDetalles').classList.add('active');
+  
+  console.log('✅ Modal de detalles mostrado');
 }
 
 function llenarDetallesRegistro(registro) {
@@ -90,6 +103,20 @@ function llenarDetallesRegistro(registro) {
   const estado = registro.Estado || '-';
   estadoElement.textContent = estado;
   estadoElement.className = 'badge ' + obtenerBadgeEstado(estado);
+  
+  // NUEVO: Mostrar "Devuelto a" si existe y el estado es "Devuelto"
+  const devueltoElement = document.getElementById('detalledevuelto');
+  const devueltoA = registro.DevueltoA || registro.devueltoA || '';
+  
+  if (estado.toLowerCase() === 'devuelto' && devueltoA) {
+    devueltoElement.textContent = devueltoA;
+    devueltoElement.style.color = 'var(--success)';
+    devueltoElement.style.fontWeight = '500';
+  } else {
+    devueltoElement.textContent = 'No aplica';
+    devueltoElement.style.color = 'var(--gray-500)';
+    devueltoElement.style.fontStyle = 'italic';
+  }
   
   // Responsable y ubicación
   document.getElementById('detalleResponsable').textContent = registro.Responsable || '-';
@@ -118,6 +145,7 @@ function llenarDetallesRegistro(registro) {
   // Debug: verificar que los datos se están cargando
   console.log('📅 Fecha de retorno cargada:', fechaRetorno);
   console.log('🏷️ Estado cargado:', estado);
+  console.log('👤 Devuelto a cargado:', devueltoA);
 }
 
 </script>
