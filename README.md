@@ -157,3 +157,6 @@ SALIDA-DE-PRODUCTO-COMARRICO/
 │   └── vencidos.html
 │
 └── README.md
+```
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/practicantetransfdigital/SALIDA-DE-PRODUCTO-COMARRICO)
