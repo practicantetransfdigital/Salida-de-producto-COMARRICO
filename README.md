@@ -1,24 +1,24 @@
-# 📦 Sistema de Salidas de Producto COMARRICO
+# Sistema de Salidas de Producto COMARRICO
 
 Aplicación web desarrollada para el **registro, control y seguimiento de salidas de producto** de inventario, orientada a procesos de calidad, inspección y control operativo en COMARRICO.
 
 ---
 
-## 🧠 Tabla de Contenidos
+## Tabla de Contenidos
 
-- [📌 Descripción](#-descripción)
-- [🎯 Objetivos del Proyecto](#-objetivos-del-proyecto)
-- [🧩 Arquitectura del Sistema](#-arquitectura-del-sistema)
-- [⚙️ Funcionalidades Principales](#️-funcionalidades-principales)
-- [🛠️ Tecnologías Utilizadas](#️-tecnologías-utilizadas)
-- [📊 Modelo de Datos](#️-modelo-de-datos)
-- [👥 Roles de Usuario](#️-roles-de-usuario)
-- [📈 Procesos Automatizados](#-procesos-automatizados)
-- [📁 Estructura del Proyecto](#-estructura-del-proyecto)
+- [Descripción](#descripción)
+- [Objetivos del Proyecto](#objetivos-del-proyecto)
+- [Arquitectura del Sistema](#arquitectura-del-sistema)
+- [Funcionalidades Principales](#️funcionalidades-principales)
+- [Tecnologías Utilizadas](#️tecnologías-utilizadas)
+- [Modelo de Datos](#️modelo-de-datos)
+- [Roles de Usuario](#️roles-de-usuario)
+- [Procesos Automatizados](#procesos-automatizados)
+- [Estructura del Proyecto](#estructura-del-proyecto)
 
 ---
 
-## 📌 Descripción
+## Descripción
 
 El **Sistema de Salidas de Producto COMARRICO** permite gestionar el retiro temporal o definitivo de productos del inventario, garantizando trazabilidad, control de fechas de retorno y monitoreo del estado de cada producto.
 
@@ -26,7 +26,7 @@ El sistema está desarrollado sobre **Google Apps Script**, utilizando **Google 
 
 ---
 
-## 🎯 Objetivos del Proyecto
+## Objetivos del Proyecto
 
 - Digitalizar el proceso de salidas de producto.
 - Controlar fechas de retorno y estados de los productos.
@@ -36,7 +36,7 @@ El sistema está desarrollado sobre **Google Apps Script**, utilizando **Google 
 
 ---
 
-## 🧩 Arquitectura del Sistema
+## Arquitectura del Sistema
 
 El sistema sigue una arquitectura **cliente-servidor**:
 
@@ -50,30 +50,30 @@ La comunicación se realiza mediante `google.script.run`.
 
 ---
 
-## ⚙️ Funcionalidades Principales
+## Funcionalidades Principales
 
-### 📝 Registro de Salidas
+### Registro de Salidas
 - Registro de nuevas salidas de producto.
 - Captura de información como código, nombre, tipo de salida, responsable y fechas.
 - Validaciones básicas de datos.
 
-### 📊 Dashboard
+### Dashboard
 - Visualización de indicadores generales.
 - Gráficas por tipo de salida, ubicación y estado.
 - Consulta histórica de registros.
 
-### ⏱️ Control de Vencimientos
+### Control de Vencimientos
 - Identificación automática de productos con fecha de retorno vencida.
 - Clasificación por nivel de criticidad.
 - Alertas automáticas por correo electrónico.
 
-### 👤 Autenticación y Roles
+### Autenticación y Roles
 - Control de acceso mediante usuarios y contraseñas.
 - Diferenciación de permisos según rol.
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Tecnologías Utilizadas
 
 | Componente | Tecnología |
 |----------|------------|
@@ -85,15 +85,15 @@ La comunicación se realiza mediante `google.script.run`.
 
 ---
 
-## 📊 Modelo de Datos
+## Modelo de Datos
 
-### 📄 Hoja **USUARIOS**
+### Hoja **USUARIOS**
 - usuario  
 - contraseña  
 - rol  
 - nombre  
 
-### 📄 Hoja **SALIDAS**
+### Hoja **SALIDAS**
 - id  
 - codigo_producto  
 - nombre_producto  
@@ -104,7 +104,7 @@ La comunicación se realiza mediante `google.script.run`.
 - estado  
 - responsable  
 
-### 📄 Hoja **OBSERVACIONES**
+### Hoja **OBSERVACIONES**
 - id_observacion  
 - id_salida  
 - estado_anterior  
@@ -114,21 +114,21 @@ La comunicación se realiza mediante `google.script.run`.
 
 ---
 
-## 👥 Roles de Usuario
+## Roles de Usuario
 
-### 🔐 Administrador
+### Administrador
 - Acceso completo al sistema.
 - Modificación de registros y estados.
 - Visualización total de reportes.
 
-### 🧪 Calidad
+### Calidad
 - Registro de salidas.
 - Seguimiento de productos.
 - Consulta de dashboards.
 
 ---
 
-## 📈 Procesos Automatizados
+## Procesos Automatizados
 
 El sistema cuenta con procesos automáticos que:
 
@@ -141,7 +141,7 @@ Estos procesos se ejecutan mediante **triggers de Google Apps Script**.
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```text
 SALIDA-DE-PRODUCTO-COMARRICO/
